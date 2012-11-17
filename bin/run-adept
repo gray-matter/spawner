@@ -1,0 +1,40 @@
+#! /usr/bin/env ruby
+
+# FIXME
+$LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
+
+require 'spawner/adept'
+require 'drb'
+require 'optparse'
+
+persistent = false
+
+options_parser = OptionParser.new()
+
+options_parser.banner = "Usage: #$0 [options] command"
+options_parser.on_head('-h', '--help', 'Print this usage') do
+  puts options_parser
+  exit 1
+end
+
+options_parser.on('-p', '--persistent', 'Whether this script shall exit after running the first duty or not') do
+  persistent = true
+end
+
+options_parser.parse!()
+
+if (ARGV.size() != 1)
+  puts options_parser
+  exit 1
+end
+
+duty_drb_uri = ARGV[0]
+
+# Retrieve the object shared by the remote server
+duty = DRbObject.new(nil, duty_drb_uri)
+
+adept = Spawner::Adept.new()
+
+begin
+  adept.give_duty(duty)
+end while persistent
