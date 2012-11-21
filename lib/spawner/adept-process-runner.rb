@@ -1,45 +1,50 @@
 require 'adept-runner'
 require 'drb-utils'
+require 'duty-container'
 
 module Spawner
   class AdeptProcessRunner < AdeptRunner
     public
+    def initialize()
+      super()
+      @adept_process_id = nil
+    end
+
+    def start(persistent_worker)
+      # FIXME for distributed stuff
+      drb_uri = DRbUtils::bind_on_next_available_port("localhost", 4242, @duty_container)
+      spawn_process(drb_uri, persistent_worker)
+    end
+
+    def stop()
+      Process.kill("TERM", @adept_process_id) rescue Errno::ESRCH
+      @adept_process_id = nil
+    end
+
+    def alive?()
+      return false if @adept_process_id.nil?()
+
+      begin
+        # Kill 0 just checks if the process is still alive
+        Process.kill(0, @adept_process_id)
+        true
+      rescue Errno::ESRCH
+        false
+      end
+    end
+
+    private
     # FIXME : configurable path
     RUN_ADEPT_SCRIPT = "#{File.dirname(__FILE__)}/../../bin/run-adept"
 
-    def initialize()
-      @adept = Adept.new()
-      @adept_process_id = nil
-      @persistent_worker = nil
-    end
-
-    def give_duty(duty, persistent_worker)
-      # FIXME : handle the persistent_worker value
-      # If the worker was persistent before and should not be anymore, then kill
-      # it and spawn a new one
-
-      # FIXME for distributed stuff
-      drb_uri = DRbUtils::bind_on_next_available_port("localhost", 4242, duty)
-
+    def spawn_process(drb_uri, persistent_worker)
       if persistent_worker
         @adept_process_id = Process.spawn(RUN_ADEPT_SCRIPT, '--persistent', drb_uri)
       else
         @adept_process_id = Process.spawn(RUN_ADEPT_SCRIPT, drb_uri)
       end
-    end
 
-    def stop()
-      @adept_thread.kill()
-    end
-
-    def alive?()
-      begin
-        # Kill 0 just checks if the process is still alive
-        Process.kill(0, pid.to_i)
-        true
-      rescue Errno::ESRCH
-        false
-      end
+      Process.detach(@adept_process_id)
     end
   end
 end

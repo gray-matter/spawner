@@ -95,6 +95,18 @@ module Spawner
           next_duty_id = nil
           runner = nil
 
+          @runners_mutex.synchronize() do
+            if !@idle_runners.empty?()
+              runner = @idle_runners.pop()
+            end
+          end
+
+          # There is no runner available
+          if runner.nil?()
+            shall_break = true
+            break
+          end
+
           @duties_mutex.synchronize() do
             if !@unassigned_duties.empty?()
               next_duty_id, next_duty = @unassigned_duties.shift()
@@ -102,26 +114,20 @@ module Spawner
             end
           end
 
-          break if next_duty.nil?()
-
-          @runners_mutex.synchronize() do
-            if !next_duty.nil?() && !@idle_runners.empty?()
-              runner = @idle_runners.pop()
-              @busy_runners[next_duty_id] = runner
-              runner.give_duty(next_duty, @config['persistent_worker'])
-            end
-          end
-
-          # There is no runner available
-          if runner.nil?()
-            # Put the job back into the unassigned duties
-            @duties_mutex.synchronize() do
-              @assigned_duties.delete(next_duty_id)
-              @unassigned_duties[next_duty_id] = next_duty
+          if next_duty.nil?()
+            # Put the runner back into the idle runners
+            @runners_mutex.synchronize() do
+              runner = @busy_runners.delete(next_duty_id)
+              @idle_runners << runner
             end
 
             shall_break = true
             break
+          else
+            @runners_mutex.synchronize() do
+              @busy_runners[next_duty_id] = runner
+              runner.give_duty(next_duty, @config['persistent_workers'])
+            end
           end
         end
 
@@ -135,7 +141,6 @@ module Spawner
     def create_needed_runners()
       @runners_mutex.synchronize() do
         nb_runners = @idle_runners.size() + @busy_runners.size()
-#        puts "#{nb_runners} running (#{@idle_runners.size()} idle, #{@busy_runners.size()} busy)"
         nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
 
         nb_runners_to_create.times do

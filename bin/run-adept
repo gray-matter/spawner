@@ -28,13 +28,20 @@ if (ARGV.size() != 1)
   exit 1
 end
 
-duty_drb_uri = ARGV[0]
+duty_container_drb_uri = ARGV[0]
 
 # Retrieve the object shared by the remote server
-duty = DRbObject.new(nil, duty_drb_uri)
+duty_container = DRbObject.new(nil, duty_container_drb_uri)
 
 adept = Spawner::Adept.new()
 
 begin
-  adept.give_duty(duty)
+  duty = duty_container.get_duty()
+
+  # FIXME : try to sleep instead, while there's nothing to do
+  if duty.nil?()
+    sleep 5
+  else
+    adept.give_duty(duty)
+  end
 end while persistent

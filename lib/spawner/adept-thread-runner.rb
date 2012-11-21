@@ -4,19 +4,23 @@ module Spawner
   class AdeptThreadRunner < AdeptRunner
     public
     def initialize()
-      @adept = Adept.new()
+      super()
       @adept_thread = nil
-      @persistent_worker = nil
     end
 
-    def give_duty(duty, persistent_worker)
-      # FIXME : handle the persistent_worker value
+    def start(persistent_worker)
       # Thread.stop when the job is done, modify the job and run
-
+      # FIXME : handle suicide duties
       @adept_thread = Thread.new() do
-        while @persistent_worker
-          @adept.give_duty(@current_duty)
-        end
+        begin
+          duty = @duty_container.get_duty()
+
+          if duty.nil?()
+            Thread.stop()
+          else
+            @adept.give_duty(duty)
+          end
+        end while persistent_worker
       end
     end
 
@@ -24,8 +28,12 @@ module Spawner
       @adept_thread.kill()
     end
 
+    def wake_up()
+      @adept_thread.run()
+    end
+
     def alive?()
-      return @adept_thread.alive?()
+      return !@adept_thread.nil?() && @adept_thread.alive?()
     end
   end
 end

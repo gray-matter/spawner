@@ -25,7 +25,9 @@ module Spawner
         @current_duty_id += 1
       end
 
-      duty = Duty.new(duty_id, instructions, method(:report_duty_start), method(:report_duty_completion))
+      duty = Duty.new(duty_id, instructions)
+      duty.register_completion_callback(method(:report_duty_completion))
+      duty.register_start_callback(method(:report_duty_start))
 
       @duties_mutex.synchronize() do
         @duties[duty_id] = duty

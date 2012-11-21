@@ -8,25 +8,26 @@ ALLOWED_COMMANDS = ['start']
 
 def usage()
   $stderr.puts "Usage: #$0 #{ALLOWED_COMMANDS.join('/')}"
-end
-
-if ARGV.size() != 1 || !ALLOWED_COMMANDS.include?(ARGV[0])
-  usage()
   exit 1
 end
 
-# TODO:
-# - daemonize
-# - make it reachable via DrB (to reload, add duty...)
-conductor = Spawner::Conductor.new("#{File.dirname(__FILE__)}/../etc/config.yml")
+usage() if ARGV.size() < 1 || !ALLOWED_COMMANDS.include?(ARGV[0])
 
-# 20.times() do |i|
-#   conductor.add_duty(Proc.new() {puts "Toto #{i}"; sleep 5}, 0)
-#   sleep 1
-# end
+command = ARGV[0]
 
-20.times() do |i|
-  conductor.add_duty(Proc.new() {puts "Toto #{i}"; sleep 5}, 0)
+case command
+  when "start"
+  config_file_name = ARGV.size() >= 2 ? ARGV[1] : "#{File.dirname(__FILE__)}/../etc/config.yml"
+  # TODO:
+  # - daemonize
+  # - make it reachable via DrB (to reload, add duty...)
+  conductor = Spawner::Conductor.new("#{File.dirname(__FILE__)}/../etc/config.yml")
+
+  # FIXME for distributed stuff
+  drb_uri = DRbUtils::bind_on_next_available_port("localhost", 4242, duty)
+
+  puts "DAAAAAAAAAAAEMON"
+  puts 'JOIN'
+
+  when "stop"
 end
-
-conductor.join() {|ass, unass| puts "Still #{ass} jobs running, #{unass} jobs in the queue"}
