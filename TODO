@@ -1,0 +1,2 @@
+Add test with various behaviours and test for each with one worker, a few and
+more than the count of jobs
