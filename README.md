@@ -21,7 +21,7 @@ end
 s.join()
 ```
 
-More examples [here](https://github.com/gray-matter/spawner/tree/master/examples).
+More examples [here](/gray-matter/spawner/tree/master/examples).
 
 Using the spawner as a service
 ------------------------------
@@ -42,4 +42,4 @@ You have the ability to tweak the spawner in various ways, including :
 * setting the number of simultaneous running workers
 
 This gem comes with a [template configuration
-file](https://github.com/gray-matter/spawner/blob/master/etc/config.yml).
+file](/gray-matter/spawner/blob/master/etc/config.yml).
