@@ -7,6 +7,8 @@ require 'spawner/adept'
 require 'drb'
 require 'optparse'
 
+HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
+
 persistent = false
 
 options_parser = OptionParser.new()
@@ -28,20 +30,70 @@ if (ARGV.size() != 1)
   exit 1
 end
 
-duty_container_drb_uri = ARGV[0]
+# Use a mutex to avoid the scenario :
+# Thread 1: There's no job, going to sleep
+# Thread 2: There's a new job, wake the worker up
+# Thread 1: Worker already awake, go to sleep
+wake_up_mutex = Mutex.new()
+worker_stopping = false
 
-# Retrieve the object shared by the remote server
-duty_container = DRbObject.new(nil, duty_container_drb_uri)
+Thread.abort_on_exception = true
 
-adept = Spawner::Adept.new()
+worker_thread = Thread.new() do
+  duty_container_drb_uri = ARGV[0]
 
-begin
-  duty = duty_container.get_duty()
+  # Retrieve the object shared by the remote server
+  duty_container = DRbObject.new(nil, duty_container_drb_uri)
 
-  # FIXME : try to sleep instead, while there's nothing to do
-  if duty.nil?()
-    sleep 5
+  adept = Spawner::Adept.new()
+
+  begin
+    duty = nil
+    duty = duty_container.get_duty()
+
+    wake_up_mutex.lock()
+
+    if duty.nil?()
+      worker_stopping = true
+      wake_up_mutex.unlock()
+
+      # Instead of waiting actively, go to sleep and wait for the spawner to wake us
+      # up
+      Thread.stop()
+
+      wake_up_mutex.synchronize() do
+        worker_stopping = false
+      end
+    else
+      wake_up_mutex.unlock()
+      adept.give_duty(duty)
+    end
+  end while persistent
+end
+
+Signal.trap('CONT') do
+  puts "IMMA BE CONT"
+  wake_up_mutex.lock()
+
+  if !worker_stopping
+    wake_up_mutex.unlock()
+    puts "Worker was not stopping"
   else
-    adept.give_duty(duty)
+    puts "Worker was stopping"
+    wake_up_mutex.unlock()
+
+    # Wait for the worker to stop for real...this shouldn't be too long
+    while !worker_thread.stop?()
+      puts "Waiting for the worker"
+      Thread.pass()
+    end
+
+    worker_thread.run()
   end
-end while persistent
+end
+
+# Hack: if we don't specify a timeout, join will throw a "deadlock detected"
+# exception when the worker thread hits the "Thread.stop()" part, thinking that
+# we're waiting for something that will never happen, even though a "CONT"
+# signal might (and should) wake it up.
+worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)

@@ -69,5 +69,9 @@ module Spawner
     def report_duty_completion(id, return_value)
       @busy = false
     end
+
+    def wake_up()
+      # Do nothing by default
+    end
   end
 end

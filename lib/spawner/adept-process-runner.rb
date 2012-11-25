@@ -46,5 +46,9 @@ module Spawner
 
       Process.detach(@adept_process_id)
     end
+
+    def wake_up()
+      Process.kill('CONT', @adept_process_id)
+    end
   end
 end
