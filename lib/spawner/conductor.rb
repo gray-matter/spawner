@@ -74,7 +74,21 @@ module Spawner
           yield nb_assigned_jobs, nb_unassigned_jobs
         end
 
+        # FIXME: handle this via an event instead
         sleep @config['join_lookup_period_seconds'].to_i()
+      end
+
+      # This should be useless
+      @runners_mutex.synchronize() do
+        @busy_runners.each() do |unused, runner|
+          runner.stop()
+        end
+      end
+
+      @runners_mutex.synchronize() do
+        @idle_runners.each() do |runner|
+          runner.stop()
+        end
       end
     end
 
@@ -231,6 +245,7 @@ module Spawner
     def harvest_supernumerary_runners()
       @runners_mutex.synchronize() do
         available_runners = @idle_runners.size() + @busy_runners.size()
+        # FIXME : what happens with the discarded runners ?!
         @idle_runners = @idle_runners[0..[0, @config['max_concurrents_duties'].to_i() - available_runners].max()]
       end
     end
