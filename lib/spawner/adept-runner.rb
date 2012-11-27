@@ -46,12 +46,19 @@ module Spawner
         start(persistent_worker)
       end
 
-      wake_up()
+      if persistent_worker
+        # FIXME: handle dead process
+        wake_up()
+      end
     end
 
     private
     def not_implemented()
       raise NotImplementedError.new()
+    end
+
+    def alive?()
+      not_implemented()
     end
 
     def report_duty_start()

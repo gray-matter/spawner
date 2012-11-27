@@ -17,8 +17,10 @@ module Spawner
     end
 
     def stop()
-      Process.kill("TERM", @adept_process_id) rescue Errno::ESRCH
-      @adept_process_id = nil
+      if !@adept_process_id.nil?()
+        Process.kill("KILL", @adept_process_id) rescue Errno::ESRCH
+        @adept_process_id = nil
+      end
     end
 
     def alive?()
