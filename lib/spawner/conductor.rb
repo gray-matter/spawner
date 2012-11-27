@@ -6,6 +6,7 @@ require 'adept'
 require 'configuration'
 require 'adept-thread-runner'
 require 'adept-process-runner'
+require 'set'
 
 module Spawner
   class Conductor
@@ -21,6 +22,9 @@ module Spawner
       @idle_runners = Array.new()
       # Maps a duty id to the runners that performs this task
       @busy_runners = Hash.new()
+      # Keep track of every runner that is btw the idle and busy states, to
+      # avoid creating unnecessary runners
+      @living_dead_runners = Set.new()
 
       @runners_mutex = Mutex.new()
 
@@ -112,6 +116,7 @@ module Spawner
           @runners_mutex.synchronize() do
             if !@idle_runners.empty?()
               runner = @idle_runners.pop()
+              @living_dead_runners << runner
             end
           end
 
@@ -131,8 +136,8 @@ module Spawner
           if next_duty.nil?()
             # Put the runner back into the idle runners
             @runners_mutex.synchronize() do
-              runner = @busy_runners.delete(next_duty_id)
               @idle_runners << runner
+              @living_dead_runners.delete(runner)
             end
 
             shall_break = true
@@ -140,6 +145,7 @@ module Spawner
           else
             @runners_mutex.synchronize() do
               @busy_runners[next_duty_id] = runner
+              @living_dead_runners.delete(runner)
               runner.give_duty(next_duty, @config['persistent_workers'])
             end
           end
@@ -154,7 +160,7 @@ module Spawner
     # Return the number of created runners.
     def create_needed_runners()
       @runners_mutex.synchronize() do
-        nb_runners = @idle_runners.size() + @busy_runners.size()
+        nb_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
         nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
 
         nb_runners_to_create.times do
@@ -244,9 +250,18 @@ module Spawner
     # Handle the possible change of the max concurrent duties configuration property.
     def harvest_supernumerary_runners()
       @runners_mutex.synchronize() do
-        available_runners = @idle_runners.size() + @busy_runners.size()
-        # FIXME : what happens with the discarded runners ?!
-        @idle_runners = @idle_runners[0..[0, @config['max_concurrents_duties'].to_i() - available_runners].max()]
+        available_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
+        max_concurrents_duties = @config['max_concurrents_duties']
+
+        if available_runners > max_concurrents_duties
+          nb_removable_items = [@idle_runners.size(), available_runners - max_concurrents_duties].min()
+
+          @idle_runners[0, nb_removable_items].each() do |runner_to_kill|
+            runner_to_kill.stop()
+          end
+
+          @idle_runners = @idle_runners[nb_removable_items..-1]
+        end
       end
     end
   end
