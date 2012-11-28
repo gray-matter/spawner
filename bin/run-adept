@@ -48,10 +48,9 @@ worker_thread = Thread.new() do
   adept = Spawner::Adept.new()
 
   begin
-    duty = nil
-    duty = duty_container.get_duty()
-
     wake_up_mutex.lock()
+
+    duty = duty_container.get_duty()
 
     if duty.nil?()
       worker_stopping = true
@@ -72,24 +71,25 @@ worker_thread = Thread.new() do
 end
 
 Signal.trap('CONT') do
-  puts "IMMA BE CONT"
   wake_up_mutex.lock()
 
   if !worker_stopping
     wake_up_mutex.unlock()
-    puts "Worker was not stopping"
   else
-    puts "Worker was stopping"
     wake_up_mutex.unlock()
 
     # Wait for the worker to stop for real...this shouldn't be too long
     while !worker_thread.stop?()
-      puts "Waiting for the worker"
       Thread.pass()
     end
 
     worker_thread.run()
   end
+end
+
+Signal.trap('TERM') do
+  # FIXME: notify something/do something w/ the current duty
+  Thread.kill(worker_thread)
 end
 
 # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
