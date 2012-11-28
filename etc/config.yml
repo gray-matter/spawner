@@ -2,5 +2,4 @@
 max_concurrents_duties: 10
 parallelism_model: 'process'
 persistent_workers: true
-join_lookup_period_seconds: 1
 first_bindable_port: 4242

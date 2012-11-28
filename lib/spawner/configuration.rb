@@ -2,8 +2,7 @@ require 'yaml'
 
 module Spawner
   class Configuration
-    EXPECTED_KEYS = ['max_concurrents_duties', 'parallelism_model',
-                     'persistent_workers', 'join_lookup_period_seconds']
+    EXPECTED_KEYS = ['max_concurrents_duties', 'parallelism_model', 'persistent_workers']
 
     public
     def initialize(config_file_name)
