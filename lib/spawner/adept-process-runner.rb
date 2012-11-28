@@ -1,6 +1,7 @@
 require 'adept-runner'
 require 'drb-utils'
 require 'duty-container'
+require 'drb'
 
 module Spawner
   class AdeptProcessRunner < AdeptRunner
@@ -12,7 +13,8 @@ module Spawner
 
     def start(persistent_worker)
       # FIXME for distributed stuff
-      drb_uri = DRbUtils::bind_on_next_available_port("localhost", 4242, @duty_container)
+      DRb.start_service(nil, @duty_container)
+      drb_uri = DRb.uri()
       spawn_process(drb_uri, persistent_worker)
     end
 
