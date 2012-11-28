@@ -34,6 +34,11 @@ module Spawner
 
       @duties_mutex = Mutex.new()
 
+      # These fields are required for implementing the "join" method
+      @joining_thread = nil
+      @joining_thread_stopping = false
+      @joining_thread_mutex = Mutex.new()
+
       @config = Configuration.new(config_file_name)
     end
 
@@ -63,37 +68,57 @@ module Spawner
     end
 
     def join()
-      while true
-        nb_assigned_jobs = nil
-        nb_unassigned_jobs = nil
+      @joining_thread = Thread.new() do
+        while true
+          nb_assigned_jobs = nil
+          nb_unassigned_jobs = nil
+          shall_break = false
 
-        @duties_mutex.synchronize() do
-          nb_assigned_jobs = @assigned_duties.size()
-          nb_unassigned_jobs = @unassigned_duties.size()
+          @joining_thread_mutex.synchronize() do
+            @duties_mutex.synchronize() do
+              nb_assigned_jobs = @assigned_duties.size()
+              nb_unassigned_jobs = @unassigned_duties.size()
+            end
+
+            shall_break = nb_assigned_jobs + nb_unassigned_jobs == 0
+
+            if !shall_break && block_given?()
+              yield nb_assigned_jobs, nb_unassigned_jobs
+            end
+
+            @joining_thread_stopping = shall_break
+          end
+
+          break if shall_break
+
+          # FIXME: same problem as run-adept: if we stop before someone wake us
+          # up, we're gonna have a bad time
+          # Wait for someone to wake us up to notify that a duty may have been
+          # completed
+          Thread.stop()
+
+          @joining_thread_stopping = false
         end
 
-        break if nb_assigned_jobs + nb_unassigned_jobs == 0
-
-        if block_given?()
-          yield nb_assigned_jobs, nb_unassigned_jobs
+        # This should be useless
+        @runners_mutex.synchronize() do
+          @busy_runners.each() do |unused, runner|
+            runner.stop()
+          end
         end
 
-        # FIXME: handle this via an event instead
-        sleep @config['join_lookup_period_seconds'].to_i()
+        @runners_mutex.synchronize() do
+          @idle_runners.each() do |runner|
+            runner.stop()
+          end
+        end
       end
 
-      # This should be useless
-      @runners_mutex.synchronize() do
-        @busy_runners.each() do |unused, runner|
-          runner.stop()
-        end
-      end
-
-      @runners_mutex.synchronize() do
-        @idle_runners.each() do |runner|
-          runner.stop()
-        end
-      end
+      # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
+      # exception when the worker thread hits the "Thread.stop()" part, thinking that
+      # we're waiting for something that will never happen, even though a "CONT"
+      # signal might (and should) wake it up.
+      @joining_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
     end
 
     def allocate_duties()
@@ -212,6 +237,8 @@ module Spawner
     end
 
     private
+    HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
+
     PARALLELISM_MODEL_THREADS = 'thread'
     PARALLELISM_MODEL_PROCESSES = 'process'
 
@@ -245,6 +272,27 @@ module Spawner
       # FIXME : handle other configuration changes, eg. running model
       harvest_supernumerary_runners()
       allocate_duties()
+
+      # The tests below are needed to avoid waking the thread for nothing just
+      # before he stops
+      if !@joining_thread.nil?()
+        @joining_thread_mutex.lock()
+
+        if @joining_thread_stopping
+          @joining_thread_mutex.unlock()
+
+          # Wait for the worker to stop for real...this shouldn't be too long
+          while !@joining_thread.stop?()
+            Thread.pass()
+          end
+
+          # If we are trying to join, let him wake up to test if he may return
+        else
+          @joining_thread_mutex.unlock()
+        end
+
+        @joining_thread.run()
+      end
     end
 
     # Handle the possible change of the max concurrent duties configuration property.
