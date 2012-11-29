@@ -1,5 +1,4 @@
 require 'adept-runner'
-require 'drb-utils'
 require 'duty-container'
 require 'drb'
 
