@@ -41,5 +41,12 @@ module Spawner
         cb.call(@id, returned_value)
       end
     end
+
+    def report_failure(exception)
+      $stderr.puts "Caught an exception in the duty: #{exception}"
+
+      # FIXME: do something better
+      report_completion(-1)
+    end
   end
 end

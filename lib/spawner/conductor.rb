@@ -91,8 +91,6 @@ module Spawner
 
           break if shall_break
 
-          # FIXME: same problem as run-adept: if we stop before someone wake us
-          # up, we're gonna have a bad time
           # Wait for someone to wake us up to notify that a duty may have been
           # completed
           Thread.stop()

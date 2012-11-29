@@ -36,39 +36,7 @@ end
 # Thread 1: Worker already awake, go to sleep
 wake_up_mutex = Mutex.new()
 worker_stopping = false
-
-Thread.abort_on_exception = true
-
-worker_thread = Thread.new() do
-  duty_container_drb_uri = ARGV[0]
-
-  # Retrieve the object shared by the remote server
-  duty_container = DRbObject.new(nil, duty_container_drb_uri)
-
-  adept = Spawner::Adept.new()
-
-  begin
-    wake_up_mutex.lock()
-
-    duty = duty_container.get_duty()
-
-    if duty.nil?()
-      worker_stopping = true
-      wake_up_mutex.unlock()
-
-      # Instead of waiting actively, go to sleep and wait for the spawner to wake us
-      # up
-      Thread.stop()
-
-      wake_up_mutex.synchronize() do
-        worker_stopping = false
-      end
-    else
-      wake_up_mutex.unlock()
-      adept.give_duty(duty)
-    end
-  end while persistent
-end
+worker_thread = nil
 
 Signal.trap('CONT') do
   wake_up_mutex.lock()
@@ -92,8 +60,62 @@ Signal.trap('TERM') do
   Thread.kill(worker_thread)
 end
 
-# Hack: if we don't specify a timeout, join will throw a "deadlock detected"
-# exception when the worker thread hits the "Thread.stop()" part, thinking that
-# we're waiting for something that will never happen, even though a "CONT"
-# signal might (and should) wake it up.
-worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
+duty_container_drb_uri = ARGV[0]
+duty_container = nil
+duty = nil
+
+begin
+  # Retrieve the object shared by the remote server
+  duty_container = DRbObject.new(nil, duty_container_drb_uri)
+rescue
+  $stderr.puts "Error: unable to connect to the conductor"
+  exit 1
+end
+
+while persistent
+  worker_thread = Thread.new() do
+    Thread.current[:error_in_spawner] = true
+
+    if !duty_container.nil?()
+      adept = Spawner::Adept.new()
+
+      begin
+        wake_up_mutex.lock()
+
+        duty = duty_container.get_duty()
+
+        if duty.nil?()
+          worker_stopping = true
+          wake_up_mutex.unlock()
+
+          # Instead of waiting actively, go to sleep and wait for the spawner to wake us
+          # up
+          Thread.stop()
+
+          wake_up_mutex.synchronize() do
+            worker_stopping = false
+          end
+        else
+          wake_up_mutex.unlock()
+          Thread.current[:error_in_spawner] = false
+          adept.give_duty(duty)
+        end
+      end while persistent
+    end
+  end
+
+  begin
+    # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
+    # exception when the worker thread hits the "Thread.stop()" part, thinking that
+    # we're waiting for something that will never happen, even though a "CONT"
+    # signal might (and should) wake it up.
+    worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
+  rescue Exception => e
+    if worker_thread[:error_in_spawner]
+      # If this is an error related to the spawner itself, die
+      raise e
+    else
+      duty.report_failure(e)
+    end
+  end
+end
