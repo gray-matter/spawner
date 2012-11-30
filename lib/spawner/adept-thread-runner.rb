@@ -18,18 +18,22 @@ module Spawner
           if duty.nil?()
             Thread.stop()
           else
-            @adept.give_duty(duty)
+            begin
+              @adept.give_duty(duty)
+            rescue Exception => e
+              duty.report_failure(e)
+            end
           end
         end while persistent_worker
       end
     end
 
     def stop()
-      @adept_thread.kill()
+      @adept_thread.kill() unless @adept_thread.nil?()
     end
 
     def wake_up()
-      @adept_thread.run()
+      @adept_thread.run() unless @adept_thread.nil?()
     end
 
     def alive?()
