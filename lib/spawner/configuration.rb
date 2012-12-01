@@ -5,14 +5,18 @@ module Spawner
     EXPECTED_KEYS = ['max_concurrents_duties', 'parallelism_model', 'persistent_workers']
 
     public
-    def initialize(config_file_name)
-      @config_file_name = config_file_name
+    def initialize()
       @config_mutex = Mutex.new()
-      load()
+      @config_file_name = nil
     end
 
-    def load()
-      new_config = YAML.load_file(@config_file_name)
+    def load(config_file_name = nil)
+      @config_mutex.synchronize() do
+        config_file_name ||= @config_file_name
+        @config_file_name = config_file_name
+      end
+
+      new_config = YAML.load_file(config_file_name)
       missing_keys = EXPECTED_KEYS - new_config.keys()
 
       if !missing_keys.empty?()

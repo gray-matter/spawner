@@ -43,7 +43,7 @@ module Spawner
     end
 
     def report_failure(exception)
-      $stderr.puts "Caught an exception in the duty: #{exception}"
+      Spawner.jobs_logger.error("Caught an exception in the duty: #{exception}")
 
       # FIXME: do something better
       report_completion(-1)

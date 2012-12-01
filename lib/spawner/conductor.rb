@@ -1,18 +1,24 @@
 # FIXME
+$LOAD_PATH.unshift("#{File.dirname(__FILE__)}/..")
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}")
 
+require 'spawner'
 require 'guru'
 require 'adept'
 require 'configuration'
 require 'adept-thread-runner'
 require 'adept-process-runner'
 require 'set'
+require 'logger'
 
 module Spawner
   class Conductor
     public
     def initialize(config_file_name)
       Thread.abort_on_exception = true
+
+      @config = Configuration.new()
+      reload_config(config_file_name)
 
       @stopping = false
 
@@ -39,7 +45,11 @@ module Spawner
       @joining_thread_stopping = false
       @joining_thread_mutex = Mutex.new()
 
-      @config = Configuration.new(config_file_name)
+      # FIXME : add a pseudo-global logger, since maintaining a local one would
+      # be painful (need to pass its changes to other classes using it)
+      @logger = nil
+      @log_file_name = nil
+      @logger_mutex = Mutex.new()
     end
 
     # Add a duty to be performed given a callable +instructions+ block and
@@ -47,7 +57,7 @@ module Spawner
     # or not, depending on the value of +perform_now+.
     def add_duty(instructions, expected_value, description = '', perform_now = true)
       if @stopping
-        puts "Server stopping...discarding this job"
+        Spawner. "Server stopping...discarding this job"
       end
 
       duty = @guru.add_duty(instructions, expected_value)
@@ -59,12 +69,14 @@ module Spawner
       allocate_duties() if perform_now
     end
 
-    def reload_config()
-      @config.reload()
+    def reload_config(config_file_name = nil)
+      @config.reload(config_file_name)
+
+      Spawner.set_internal_log_file(@config['spawner_log_file_name'])
+      Spawner.set_jobs_log_file(@config['jobs_log_file_name'])
 
       # FIXME: if the parallelism model changes, terminate every runner which
       # runs with the old model
-      # Adjust the number of runners if the max changes.
     end
 
     def join()
@@ -197,10 +209,12 @@ module Spawner
     def stop()
       @stopping = true
 
-      puts "Now stopping..."
+      Spawner.internal_logger.info("Now stopping...")
 
       @duties_mutex.synchronize() do
-        puts "Notice: discarding #{@unassigned_duties.size()} unassigned jobs" unless @unassigned_duties.empty?()
+        if !@unassigned_duties.empty?()
+          Spawner.internal_logger.info("Notice: discarding #{@unassigned_duties.size()} unassigned jobs")
+        end
       end
 
       @runners_mutex.synchronize() do
