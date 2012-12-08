@@ -61,14 +61,6 @@ module Spawner
       not_implemented()
     end
 
-    def report_duty_start()
-      not_implemented()
-    end
-
-    def report_duty_completion()
-      not_implemented()
-    end
-
     def report_duty_start(id)
       @busy = true
     end
