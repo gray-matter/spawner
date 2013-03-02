@@ -10,10 +10,11 @@ module Spawner
 
     def start(persistent_worker)
       # Thread.stop when the job is done, modify the job and run
-      # FIXME : handle suicide duties
       @adept_thread = Thread.new() do
         begin
           duty = @duty_container.get_duty()
+
+          # FIXME : possible deadlock ?
 
           if duty.nil?()
             Thread.stop()

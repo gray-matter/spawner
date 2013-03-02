@@ -2,3 +2,5 @@
 max_concurrents_duties: 10
 parallelism_model: 'process'
 persistent_workers: true
+spawner_log_file_name: '/tmp/jobs_log'
+internal_log_file_name: '/tmp/internal_log'

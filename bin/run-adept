@@ -26,7 +26,7 @@ end
 options_parser.parse!()
 
 if (ARGV.size() != 1)
-  puts options_parser
+  $stderr.puts options_parser
   exit 1
 end
 
@@ -38,6 +38,7 @@ wake_up_mutex = Mutex.new()
 worker_stopping = false
 worker_thread = nil
 
+# FIXME : use a ConditionVariable instead
 Signal.trap('CONT') do
   wake_up_mutex.lock()
 
@@ -74,6 +75,7 @@ end
 
 while persistent
   worker_thread = Thread.new() do
+    # We want to catch anything BUT our own exceptions
     Thread.current[:error_in_spawner] = true
 
     if !duty_container.nil?()
