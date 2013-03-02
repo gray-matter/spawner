@@ -15,7 +15,6 @@ module Spawner
   class Conductor
     public
     def initialize(config_file_name)
-      puts "Guru is #$$"
       Thread.abort_on_exception = true
 
       @config = Configuration.new()
@@ -56,7 +55,7 @@ module Spawner
     # Add a duty to be performed given a callable +instructions+ block and
     # expecting it to return an +expected_value+. Perform the task immediately
     # or not, depending on the value of +perform_now+.
-    def add_duty(instructions, expected_value, description = '', perform_now = true)
+    def add_duty(expected_value, perform_now = true, &instructions)
       if @stopping
         Spawner.internal_logger.info("Server stopping...discarding this job")
       end

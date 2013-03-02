@@ -8,8 +8,6 @@ module Spawner
     REQUIRED_DUTY_METHODS = ['get_instructions', 'report_completion']
 
     def give_duty(duty)
-      $stderr.puts $$
-
       REQUIRED_DUTY_METHODS.each() do |method|
         raise "I will not perform my duty because it doesn't say how to '#{method}'" if !duty.respond_to?(method)
       end
@@ -20,7 +18,9 @@ module Spawner
     private
 
     def perform_duty(duty)
-      instructions = duty.get_instructions().clone()
+      # FIXME : this will be a proc anytime, which can be a problem if it
+      # contains a return statement.
+      instructions = eval(duty.get_instructions())
       ret = instructions.call()
       duty.report_completion(ret)
     end

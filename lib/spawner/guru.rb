@@ -15,8 +15,10 @@ module Spawner
       @current_duty_id = 1
     end
 
+    # Add a duty to the
     # Return an unique duty id whose status may be polled later using the
     # duty_completed? method
+    # FIXME: duty id or duty itself ?
     def add_duty(instructions, expected_value)
       duty_id = nil
 

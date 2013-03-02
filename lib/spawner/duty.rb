@@ -1,3 +1,5 @@
+require 'sourcify'
+
 module Spawner
   # FIXME: prevent adepts from taking other adepts's duty
   class Duty
@@ -33,7 +35,7 @@ module Spawner
         cb.call(@id)
       end
 
-      return @instructions
+      return @instructions.to_source()
     end
 
     def report_completion(returned_value)
@@ -43,7 +45,7 @@ module Spawner
     end
 
     def report_failure(exception)
-      Spawner.jobs_logger.error("Caught an exception in the duty: #{exception}")
+      Spawner.jobs_logger.error("Caught an exception in the duty: '#{exception.message}'\n#{exception.backtrace().join("\n")}")
 
       # FIXME: do something better
       report_completion(-1)
