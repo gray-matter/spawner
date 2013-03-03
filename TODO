@@ -5,3 +5,4 @@
  - Test that there are not more than "concurrent duties" duties at any time
  - Proper logging
  - Make it work under Windows
+ - Test with and without persistency

@@ -56,6 +56,7 @@ Signal.trap('CONT') do
   end
 end
 
+# FIXME : use a ConditionVariable instead
 Signal.trap('TERM') do
   # FIXME: notify something/do something w/ the current duty
   Thread.kill(worker_thread)
@@ -73,7 +74,7 @@ rescue
   exit 1
 end
 
-while persistent
+begin
   worker_thread = Thread.new() do
     # We want to catch anything BUT our own exceptions
     Thread.current[:error_in_spawner] = true
@@ -120,4 +121,4 @@ while persistent
       duty.report_failure(e)
     end
   end
-end
+end while persistent

@@ -14,14 +14,18 @@ Using the spawner as a class
 ----------------------------
 ```ruby
 require 'spawner'
+
+EXPECTED_RETURN = 0
 s = Spawner::Conductor.new('/path/to/config.yml')
 1.upto(10) do |i|
-  s.add_duty(Proc.new() { puts "Task #{i}" })
+  s.add_duty(EXPECTED_RETURN) do
+    puts "Task #{i}"
+  end
 end
 s.join()
 ```
 
-More examples [here](/gray-matter/spawner/tree/master/examples).
+More examples [here](/examples).
 
 Using the spawner as a service
 ------------------------------
@@ -42,4 +46,4 @@ You have the ability to tweak the spawner in various ways, including :
 * setting the number of simultaneous running workers
 
 This gem comes with a [template configuration
-file](/gray-matter/spawner/blob/master/etc/config.yml).
+file](/etc/config.yml).
