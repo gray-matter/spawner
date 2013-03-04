@@ -6,3 +6,4 @@
  - Proper logging
  - Make it work under Windows
  - Test with and without persistency
+ - Stop cleanly

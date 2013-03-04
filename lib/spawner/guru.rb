@@ -1,7 +1,9 @@
 require 'duty'
 
 module Spawner
-  # A Guru holds the instructions and knows which adept is in charge of which duty
+  # A Guru holds the instructions and knows which adept is in charge of which
+  # duty
+  # FIXME: this is no longer true, cf. conductor
   class Guru
     public
 
