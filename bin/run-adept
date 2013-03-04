@@ -3,6 +3,7 @@
 # FIXME
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
+require 'monitor'
 require 'spawner/adept'
 require 'drb'
 require 'optparse'
@@ -38,30 +39,6 @@ wake_up_mutex = Mutex.new()
 worker_stopping = false
 worker_thread = nil
 
-# FIXME : use a ConditionVariable instead
-Signal.trap('CONT') do
-  wake_up_mutex.lock()
-
-  if !worker_stopping
-    wake_up_mutex.unlock()
-  else
-    wake_up_mutex.unlock()
-
-    # Wait for the worker to stop for real...this shouldn't be too long
-    while !worker_thread.stop?()
-      Thread.pass()
-    end
-
-    worker_thread.run()
-  end
-end
-
-# FIXME : use a ConditionVariable instead
-Signal.trap('TERM') do
-  # FIXME: notify something/do something w/ the current duty
-  Thread.kill(worker_thread)
-end
-
 duty_container_drb_uri = ARGV[0]
 duty_container = nil
 duty = nil
@@ -69,56 +46,62 @@ duty = nil
 begin
   # Retrieve the object shared by the remote server
   duty_container = DRbObject.new(nil, duty_container_drb_uri)
+  duty_container.extend(MonitorMixin)
 rescue
   $stderr.puts "Error: unable to connect to the conductor"
   exit 1
 end
 
-begin
-  worker_thread = Thread.new() do
-    # We want to catch anything BUT our own exceptions
-    Thread.current[:error_in_spawner] = true
+duty_empty_cond = duty_container.new_cond()
 
-    if !duty_container.nil?()
-      adept = Spawner::Adept.new()
+Signal.trap('CONT') do
+  duty_container.synchronize() do
+    duty_empty_cond.signal()
+  end
+end
 
-      begin
-        wake_up_mutex.lock()
+Signal.trap('TERM') do
+  # FIXME: notify something/do something w/ the current duty
+  Thread.kill(worker_thread)
+end
 
+$stdout.sync = true
+
+worker_thread = Thread.new() do
+  # We want to catch anything BUT our own exceptions
+  Thread.current[:error_in_spawner] = true
+
+  if !duty_container.nil?()
+    adept = Spawner::Adept.new()
+
+    begin
+      duty_container.synchronize() do
+        # This is the single most important line of this whole script. Do not
+        # wait if there's something to do, but if not, wait patiently for
+        # someone to wake us up.
+        duty_empty_cond.wait_while { !duty_container.has_duty?() }
+
+        # Duty shall NEVER be nil !
         duty = duty_container.get_duty()
 
-        if duty.nil?()
-          worker_stopping = true
-          wake_up_mutex.unlock()
-
-          # Instead of waiting actively, go to sleep and wait for the spawner to wake us
-          # up
-          Thread.stop()
-
-          wake_up_mutex.synchronize() do
-            worker_stopping = false
-          end
-        else
-          wake_up_mutex.unlock()
-          Thread.current[:error_in_spawner] = false
-          adept.give_duty(duty)
-        end
-      end while persistent
-    end
+        Thread.current[:error_in_spawner] = false
+        adept.give_duty(duty)
+      end
+    end while persistent
   end
+end
 
-  begin
-    # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
-    # exception when the worker thread hits the "Thread.stop()" part, thinking that
-    # we're waiting for something that will never happen, even though a "CONT"
-    # signal might (and should) wake it up.
-    worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
-  rescue Exception => e
-    if worker_thread[:error_in_spawner]
-      # If this is an error related to the spawner itself, die
-      raise e
-    else
-      duty.report_failure(e)
-    end
+begin
+  # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
+  # exception when the worker thread hits the "Thread.stop()" part, thinking that
+  # we're waiting for something that will never happen, even though a "CONT"
+  # signal might (and should) wake it up.
+  worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
+rescue Exception => e
+  if worker_thread[:error_in_spawner]
+    # If this is an error related to the spawner itself, die
+    raise e
+  else
+    duty.report_failure(e) unless duty.nil?()
   end
-end while persistent
+end
