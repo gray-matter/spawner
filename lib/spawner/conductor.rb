@@ -24,32 +24,26 @@ module Spawner
 
       @guru = Guru.new(method(:report_duty_completion))
 
+      # FIXME: could we merge runners and duties lists ?
+
       # List the idle adept runners
       @idle_runners = Array.new()
-      # Maps a duty id to the runners that performs this task
+      # Maps a duty id to the runner that performs this task
       @busy_runners = Hash.new()
       # Keep track of every runner that is btw the idle and busy states, to
       # avoid creating unnecessary runners
       @living_dead_runners = Set.new()
 
-      @runners_mutex = Mutex.new()
-
       # The lists of assigned and unassigned duties
-      @assigned_duties = Hash.new()
       @unassigned_duties = Hash.new()
 
+      # Applies to both runners and duties
       @duties_mutex = Mutex.new()
 
       # These fields are required for implementing the "join" method
       @joining_thread = nil
       @joining_thread_stopping = false
       @joining_thread_mutex = Mutex.new()
-
-      # FIXME : add a pseudo-global logger, since maintaining a local one would
-      # be painful (need to pass its changes to other classes using it)
-      @logger = nil
-      @log_file_name = nil
-      @logger_mutex = Mutex.new()
     end
 
     # Add a duty to be performed given a callable +instructions+ block and
@@ -88,7 +82,7 @@ module Spawner
 
           @joining_thread_mutex.synchronize() do
             @duties_mutex.synchronize() do
-              nb_assigned_jobs = @assigned_duties.size()
+              nb_assigned_jobs = @busy_runners.size()
               nb_unassigned_jobs = @unassigned_duties.size()
             end
 
@@ -111,13 +105,11 @@ module Spawner
         end
 
         # This should be useless
-        @runners_mutex.synchronize() do
+        @duties_mutex.synchronize() do
           @busy_runners.each() do |unused, runner|
             runner.stop()
           end
-        end
 
-        @runners_mutex.synchronize() do
           @idle_runners.each() do |runner|
             runner.stop()
           end
@@ -148,42 +140,37 @@ module Spawner
           next_duty_id = nil
           runner = nil
 
-          @runners_mutex.synchronize() do
+          @duties_mutex.synchronize() do
             if !@idle_runners.empty?()
               runner = @idle_runners.pop()
               @living_dead_runners << runner
             end
-          end
 
-          # There is no runner available
-          if runner.nil?()
-            shall_break = true
-            break
-          end
+            # There is no runner available
+            if runner.nil?()
+              shall_break = true
+              break
+            end
 
-          @duties_mutex.synchronize() do
             if !@unassigned_duties.empty?()
               next_duty_id, next_duty = @unassigned_duties.shift()
-              @assigned_duties[next_duty_id] = next_duty
             end
-          end
 
-          if next_duty.nil?()
-            # Put the runner back into the idle runners
-            @runners_mutex.synchronize() do
+            if next_duty.nil?()
+              # Put the runner back into the idle runners
               @idle_runners << runner
               @living_dead_runners.delete(runner)
+
+              shall_break = true
+              break
             end
 
-            shall_break = true
-            break
-          else
-            @runners_mutex.synchronize() do
-              @busy_runners[next_duty_id] = runner
-              @living_dead_runners.delete(runner)
-              runner.give_duty(next_duty, @config['persistent_workers'])
-            end
+            @busy_runners[next_duty_id] = runner
+            @living_dead_runners.delete(runner)
+            runner.give_duty(next_duty, @config['persistent_workers'])
           end
+
+          break if shall_break
         end
 
         break if shall_break
@@ -194,15 +181,13 @@ module Spawner
     # configuration value.
     # Return the number of created runners.
     def create_needed_runners()
-      @runners_mutex.synchronize() do
+      @duties_mutex.synchronize() do
         nb_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
         nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
 
         nb_runners_to_create.times do
           @idle_runners << spawn_adept_runner()
         end
-
-        return nb_runners_to_create
       end
     end
 
@@ -214,10 +199,9 @@ module Spawner
       @duties_mutex.synchronize() do
         if !@unassigned_duties.empty?()
           Spawner.internal_logger.info("Notice: discarding #{@unassigned_duties.size()} unassigned jobs")
+          @unassigned_duties.clear()
         end
-      end
 
-      @runners_mutex.synchronize() do
         @busy_runners.each() do |runner|
           runner.stop()
         end
@@ -235,13 +219,13 @@ module Spawner
 
     def jobs_left()
       @duties_mutex.synchronize() do
-        return @unassigned_duties.size() + @assigned_duties.size()
+        return @unassigned_duties.size() + @busy_runners.size()
       end
     end
 
     # Return true if at least one runner is busy
     def busy?()
-      @runners_mutex.synchronize() do |runner|
+      @duties_mutex.synchronize() do |runner|
         return true if runner.busy?()
       end
 
@@ -277,8 +261,6 @@ module Spawner
       @duties_mutex.synchronize() do
         runner = @busy_runners.delete(duty_id)
         @idle_runners << runner
-
-        @assigned_duties.delete(duty_id)
       end
 
       # FIXME : handle other configuration changes, eg. running model
@@ -298,7 +280,7 @@ module Spawner
             Thread.pass()
           end
 
-          # If we are trying to join, let him wake up to test if he may return
+        # If we are trying to join, let him wake up to test if he may return
         else
           @joining_thread_mutex.unlock()
         end
@@ -309,7 +291,7 @@ module Spawner
 
     # Handle the possible change of the max concurrent duties configuration property.
     def harvest_supernumerary_runners()
-      @runners_mutex.synchronize() do
+      @duties_mutex.synchronize() do
         available_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
         max_concurrents_duties = @config['max_concurrents_duties']
 
