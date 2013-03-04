@@ -14,19 +14,25 @@ module Spawner
 
     # Get the duty and discard it
     def get_duty()
-      duty = nil
+      next_duty = nil
 
       @duty_mutex.synchronize() do
-        duty = @duty
+        next_duty = @duty
         @duty = nil
       end
 
-      return duty
+      return next_duty
     end
 
-    def duty=(duty)
+    def has_duty?()
       @duty_mutex.synchronize() do
-        @duty = duty
+        return !@duty.nil?()
+      end
+    end
+
+    def duty=(the_duty)
+      @duty_mutex.synchronize() do
+        @duty = the_duty
       end
     end
   end
