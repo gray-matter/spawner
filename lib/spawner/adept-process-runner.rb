@@ -37,6 +37,10 @@ module Spawner
       end
     end
 
+    def to_s()
+      return "#<AdeptProcessRunner: pid = #@adept_process_id>"
+    end
+
     private
     # FIXME : configurable path
     RUN_ADEPT_SCRIPT = "#{File.dirname(__FILE__)}/../../bin/run-adept"
