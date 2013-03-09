@@ -3,10 +3,10 @@
 # FIXME
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
-require 'monitor'
 require 'spawner/adept'
 require 'drb'
 require 'optparse'
+require 'thread'
 
 HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
 
@@ -41,22 +41,21 @@ worker_thread = nil
 
 duty_container_drb_uri = ARGV[0]
 duty_container = nil
+duty_container_mutex = Mutex.new()
+duty_container_cond = ConditionVariable.new()
 duty = nil
 
 begin
   # Retrieve the object shared by the remote server
   duty_container = DRbObject.new(nil, duty_container_drb_uri)
-  duty_container.extend(MonitorMixin)
 rescue
   $stderr.puts "Error: unable to connect to the conductor"
   exit 1
 end
 
-duty_empty_cond = duty_container.new_cond()
-
 Signal.trap('CONT') do
-  duty_container.synchronize() do
-    duty_empty_cond.signal()
+  duty_container_mutex.synchronize() do
+    duty_container_cond.signal()
   end
 end
 
@@ -75,11 +74,11 @@ worker_thread = Thread.new() do
     adept = Spawner::Adept.new()
 
     begin
-      duty_container.synchronize() do
+      duty_container_mutex.synchronize() do
         # This is the single most important line of this whole script. Do not
         # wait if there's something to do, but if not, wait patiently for
         # someone to wake us up.
-        duty_empty_cond.wait_while { !duty_container.has_duty?() }
+        duty_container_cond.wait(duty_container_mutex) if !duty_container.has_duty?()
 
         # Duty shall NEVER be nil !
         duty = duty_container.get_duty()
