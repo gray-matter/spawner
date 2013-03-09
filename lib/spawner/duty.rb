@@ -12,35 +12,34 @@ module Spawner
       @duty_completion_callbacks = Array.new()
       @id = id
       @instructions = instructions
+      @cb_mutex = Mutex.new()
     end
 
     def register_completion_callback(callback, in_front = false)
-      if in_front
-        @duty_completion_callbacks.unshift(callback)
-      else
-        @duty_completion_callbacks << callback
-      end
+      register_to_callback(@duty_completion_callbacks, callback, in_front)
     end
 
     def register_start_callback(callback, in_front = false)
-      if in_front
-        @duty_start_callbacks.unshift(callback)
-      else
-        @duty_start_callbacks << callback
-      end
+      register_to_callback(@duty_start_callbacks, callback, in_front)
     end
 
     def get_instructions()
-      @duty_start_callbacks.each() do |cb|
-        cb.call(@id)
+      # FIXME: do this asynchronously ?
+      @cb_mutex.synchronize() do
+        @duty_start_callbacks.each() do |cb|
+          cb.call(@id)
+        end
       end
 
       return @instructions.to_source()
     end
 
     def report_completion(returned_value)
-      @duty_completion_callbacks.each() do |cb|
-        cb.call(@id, returned_value)
+      # FIXME: do this asynchronously ?
+      @cb_mutex.synchronize() do
+        @duty_completion_callbacks.each() do |cb|
+          cb.call(@id, returned_value)
+        end
       end
     end
 
@@ -49,6 +48,17 @@ module Spawner
 
       # FIXME: do something better
       report_completion(-1)
+    end
+
+    private
+    def register_callback(cb_list, cb, in_front)
+      @cb_mutex.synchronize() do
+        if in_front
+          cb_list.unshift(cb)
+        else
+          cb_list << cb
+        end
+      end
     end
   end
 end
