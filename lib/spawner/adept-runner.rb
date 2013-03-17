@@ -1,55 +1,60 @@
 module Spawner
   class AdeptRunner
     public
-    attr_reader :busy
 
-    alias busy? busy
+    def busy?()
+      @mutex.synchronize() do
+        return @busy
+      end
+    end
 
     def initialize()
       @busy = false
+      @job_mutex = Mutex.new()
       @duty_container = DutyContainer.new()
-      @persistent_worker = nil
-      @adept = Adept.new()
+      @duty_start_callback = Proc.new() {}
+      @duty_completion_callback = Proc.new() {}
+      @duty_failure_callback = Proc.new() {}
     end
 
     def stop()
-      not_implemented()
-    end
-
-    def try_stop()
-      if !busy?()
-        stop()
-        return true
+      @job_mutex.synchronize() do
+        @busy = false
       end
-
-      return false
     end
 
     def give_duty(duty, persistent_worker)
-      # If the worker was persistent before and should not be anymore, then kill
-      # it and spawn a new one
-      if !persistent_worker && (!@persistent_worker.nil?() && @persistent_worker)
+      if !persistent_worker
         stop()
       end
 
-      if busy?()
-        raise "Unable to give a duty to a busy runner"
+      duty.register_start_callback(method(:report_duty_start))
+      duty.register_completion_callback(method(:report_duty_completion))
+      duty.register_failure_callback(method(:report_duty_failure))
+
+      @job_mutex.synchronize() do
+        raise "Unable to give a duty to a busy runner" if @busy
+
+        @duty_container.duty = duty
       end
 
-      duty.register_completion_callback(method(:report_duty_completion), true)
-      duty.register_start_callback(method(:report_duty_start), true)
-
-      @persistent_worker = persistent_worker
-      @duty_container.duty = duty
-
-      if !alive?()
+      if persistent_worker && alive?()
+        wake_up()
+      else
         start(persistent_worker)
       end
+    end
 
-      if persistent_worker
-        # FIXME: handle dead process
-        wake_up()
-      end
+    def register_completion_callback(callback)
+      @duty_completion_callback = callback
+    end
+
+    def register_start_callback(callback)
+      @duty_start_callback = callback
+    end
+
+    def register_failure_callback(callback)
+      @duty_failure_callback = callback
     end
 
     private
@@ -62,11 +67,19 @@ module Spawner
     end
 
     def report_duty_start(id)
-      @busy = true
+      @duty_start_callback.call(id)
     end
 
     def report_duty_completion(id, return_value)
-      @busy = false
+      @job_mutex.synchronize() do
+        @busy = false
+      end
+
+      @duty_completion_callback.call(id, return_value)
+    end
+
+    def report_duty_failure(id)
+      @duty_failure_callback.call(id)
     end
 
     def wake_up()

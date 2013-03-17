@@ -10,6 +10,9 @@ require 'thread'
 
 HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
 
+$stdout.sync = true
+$stderr.sync = true
+
 persistent = false
 
 options_parser = OptionParser.new()
@@ -31,14 +34,7 @@ if (ARGV.size() != 1)
   exit 1
 end
 
-# Use a mutex to avoid the scenario :
-# Thread 1: There's no job, going to sleep
-# Thread 2: There's a new job, wake the worker up
-# Thread 1: Worker already awake, go to sleep
-wake_up_mutex = Mutex.new()
-worker_stopping = false
 worker_thread = nil
-
 duty_container_drb_uri = ARGV[0]
 duty_container = nil
 duty_container_mutex = Mutex.new()
@@ -64,8 +60,6 @@ Signal.trap('TERM') do
   Thread.kill(worker_thread)
 end
 
-$stdout.sync = true
-
 worker_thread = Thread.new() do
   # We want to catch anything BUT our own exceptions
   Thread.current[:error_in_spawner] = true
@@ -73,26 +67,26 @@ worker_thread = Thread.new() do
   if !duty_container.nil?()
     adept = Spawner::Adept.new()
 
-    begin
-      duty_container_mutex.synchronize() do
-        # This is the single most important line of this whole script. Do not
-        # wait if there's something to do, but if not, wait patiently for
-        # someone to wake us up.
-        duty_container_cond.wait(duty_container_mutex) if !duty_container.has_duty?()
-
-        # Duty shall NEVER be nil !
+    duty_container_mutex.synchronize() do
+      begin
         duty = duty_container.get_duty()
 
         Thread.current[:error_in_spawner] = false
         adept.give_duty(duty)
-      end
-    end while persistent
+        Thread.current[:error_in_spawner] = true
+
+        # This is the single most important line of this whole script. If
+        # there's nothing to do, release the mutex and wait patiently for
+        # someone to wake us up.
+        duty_container_cond.wait(duty_container_mutex) if persistent
+      end while persistent
+    end
   end
 end
 
 begin
   # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
-  # exception when the worker thread hits the "Thread.stop()" part, thinking that
+  # exception when the worker thread hits the waiting part, thinking that
   # we're waiting for something that will never happen, even though a "CONT"
   # signal might (and should) wake it up.
   worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)

@@ -7,3 +7,9 @@
  - Make it work under Windows
  - Test with and without persistency
  - Stop cleanly
+ - Make this a gem !
+ - Handle return in the given block (transform into a lambda)
+ - Test different values of perform_now
+ - Use a mixin for the completion/failure/start pattern ?
+ - Move report stuff to the container, since the duty can be invalid !
+ - Allow configuring the app with something else than a file

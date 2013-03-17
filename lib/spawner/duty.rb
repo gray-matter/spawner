@@ -8,57 +8,45 @@ module Spawner
     attr_reader :id
 
     def initialize(id, instructions)
-      @duty_start_callbacks = Array.new()
-      @duty_completion_callbacks = Array.new()
       @id = id
       @instructions = instructions
-      @cb_mutex = Mutex.new()
-    end
-
-    def register_completion_callback(callback, in_front = false)
-      register_to_callback(@duty_completion_callbacks, callback, in_front)
-    end
-
-    def register_start_callback(callback, in_front = false)
-      register_to_callback(@duty_start_callbacks, callback, in_front)
+      @duty_start_callback = Proc.new() {}
+      @duty_completion_callback = Proc.new() {}
+      @duty_failure_callback = Proc.new() {}
     end
 
     def get_instructions()
-      # FIXME: do this asynchronously ?
-      @cb_mutex.synchronize() do
-        @duty_start_callbacks.each() do |cb|
-          cb.call(@id)
-        end
-      end
+      # FIXME: this shouldn't exist and the duty should know about its own start
+      # and end time (remove this callback from Guru)
+      @duty_start_callback.call(@id)
 
       return @instructions.to_source()
     end
 
+    def register_completion_callback(callback)
+      @duty_completion_callback = callback
+    end
+
+    def register_start_callback(callback)
+      @duty_start_callback = callback
+    end
+
+    def register_failure_callback(callback)
+      @duty_failure_callback = callback
+    end
+
     def report_completion(returned_value)
-      # FIXME: do this asynchronously ?
-      @cb_mutex.synchronize() do
-        @duty_completion_callbacks.each() do |cb|
-          cb.call(@id, returned_value)
-        end
+      Thread.new() do
+        @duty_completion_callback.call(@id, returned_value)
       end
     end
 
     def report_failure(exception)
-      Spawner.jobs_logger.error("Caught an exception in the duty: '#{exception.message}'\n#{exception.backtrace().join("\n")}")
-
-      # FIXME: do something better
-      report_completion(-1)
+      @duty_failure_callback.call(@id, exception)
     end
 
-    private
-    def register_callback(cb_list, cb, in_front)
-      @cb_mutex.synchronize() do
-        if in_front
-          cb_list.unshift(cb)
-        else
-          cb_list << cb
-        end
-      end
+    def report_start()
+      @duty_start_callback.call(@id)
     end
   end
 end

@@ -10,9 +10,15 @@ require 'adept-thread-runner'
 require 'adept-process-runner'
 require 'set'
 require 'logger'
+require 'thread'
 
 module Spawner
+  # The Conductor is the emerged part of the spawner library.
+  # It is in charge of creating (aka recruiting) adepts whenever needed.
   class Conductor
+    private
+    HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
+
     public
     def initialize(config_file_name)
       Thread.abort_on_exception = true
@@ -22,42 +28,30 @@ module Spawner
 
       @stopping = false
 
-      @guru = Guru.new(method(:report_duty_completion))
-
-      # FIXME: could we merge runners and duties lists ?
+      @guru = Guru.new()
+      @guru.register_duty_end_callback(method(:report_duty_end))
 
       # List the idle adept runners
       @idle_runners = Array.new()
       # Maps a duty id to the runner that performs this task
       @busy_runners = Hash.new()
-      # Keep track of every runner that is btw the idle and busy states, to
-      # avoid creating unnecessary runners
-      @living_dead_runners = Set.new()
-
-      # The lists of assigned and unassigned duties
-      @unassigned_duties = Hash.new()
-
-      # Applies to both runners and duties
-      @duties_mutex = Mutex.new()
+      @runners_mutex = Mutex.new()
 
       # These fields are required for implementing the "join" method
       @joining_thread = nil
-      @joining_thread_stopping = false
-      @joining_thread_mutex = Mutex.new()
+      @no_more_duty_cond = ConditionVariable.new()
     end
 
     # Add a duty to be performed given a callable +instructions+ block and
     # expecting it to return an +expected_value+. Perform the task immediately
     # or not, depending on the value of +perform_now+.
-    def add_duty(expected_value, perform_now = true, &instructions)
+    def add_duty(expected_value = nil, perform_now = true, &instructions)
       if @stopping
         Spawner.internal_logger.info("Server stopping...discarding this job")
       end
 
-      duty = @guru.add_duty(instructions, expected_value)
-
-      @duties_mutex.synchronize() do
-        @unassigned_duties[duty.id] = duty
+      @runners_mutex.synchronize() do
+        @guru.add_duty(instructions, expected_value)
       end
 
       allocate_duties() if perform_now
@@ -76,36 +70,25 @@ module Spawner
     def join()
       @joining_thread = Thread.new() do
         while true
-          nb_assigned_jobs = nil
-          nb_unassigned_jobs = nil
           shall_break = false
 
-          @joining_thread_mutex.synchronize() do
-            @duties_mutex.synchronize() do
-              nb_assigned_jobs = @busy_runners.size()
-              nb_unassigned_jobs = @unassigned_duties.size()
+          @runners_mutex.synchronize() do
+            if !@busy_runners.empty?()
+              if block_given?()
+                yield @guru.duties_count_breakdown()
+              end
+
+              @no_more_duty_cond.wait(@runners_mutex)
+            else
+              shall_break = true
+              break
             end
-
-            shall_break = nb_assigned_jobs + nb_unassigned_jobs == 0
-
-            if !shall_break && block_given?()
-              yield nb_assigned_jobs, nb_unassigned_jobs
-            end
-
-            @joining_thread_stopping = shall_break
           end
 
           break if shall_break
-
-          # Wait for someone to wake us up to notify that a duty may have been
-          # completed
-          Thread.stop()
-
-          @joining_thread_stopping = false
         end
 
-        # This should be useless
-        @duties_mutex.synchronize() do
+        @runners_mutex.synchronize() do
           @busy_runners.each() do |unused, runner|
             runner.stop()
           end
@@ -116,77 +99,18 @@ module Spawner
         end
       end
 
-      # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
-      # exception when the worker thread hits the "Thread.stop()" part, thinking that
-      # we're waiting for something that will never happen, even though a "CONT"
-      # signal might (and should) wake it up.
       @joining_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
     end
 
-    def allocate_duties()
-      while true
-        shall_break = false
+    def start()
+      create_needed_runners()
 
-        @duties_mutex.synchronize() do
-          shall_break = @unassigned_duties.empty?()
-        end
+      @runners_mutex.synchronize() do
+        duty_id_to_runner_mapping = @guru.assign_duties(@idle_runners, @config['persistent_workers'])
 
-        break if shall_break
-
-        create_needed_runners()
-
-        while true
-          next_duty = nil
-          next_duty_id = nil
-          runner = nil
-
-          @duties_mutex.synchronize() do
-            if !@idle_runners.empty?()
-              runner = @idle_runners.pop()
-              @living_dead_runners << runner
-            end
-
-            # There is no runner available
-            if runner.nil?()
-              shall_break = true
-              break
-            end
-
-            if !@unassigned_duties.empty?()
-              next_duty_id, next_duty = @unassigned_duties.shift()
-            end
-
-            if next_duty.nil?()
-              # Put the runner back into the idle runners
-              @idle_runners << runner
-              @living_dead_runners.delete(runner)
-
-              shall_break = true
-              break
-            end
-
-            @busy_runners[next_duty_id] = runner
-            @living_dead_runners.delete(runner)
-            runner.give_duty(next_duty, @config['persistent_workers'])
-          end
-
-          break if shall_break
-        end
-
-        break if shall_break
-      end
-    end
-
-    # Create as many runners as possible, capped by the max_concurrents_duties
-    # configuration value.
-    # Return the number of created runners.
-    def create_needed_runners()
-      @duties_mutex.synchronize() do
-        nb_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
-        nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
-
-        nb_runners_to_create.times do
-          @idle_runners << spawn_adept_runner()
+        if !duty_id_to_runner_mapping.empty?()
+          @idle_runners -= duty_id_to_runner_mapping.values()
+          @busy_runners.merge!(duty_id_to_runner_mapping)
         end
       end
     end
@@ -196,47 +120,36 @@ module Spawner
 
       Spawner.internal_logger.info("Now stopping...")
 
-      @duties_mutex.synchronize() do
-        if !@unassigned_duties.empty?()
-          Spawner.internal_logger.info("Notice: discarding #{@unassigned_duties.size()} unassigned jobs")
-          @unassigned_duties.clear()
-        end
-
-        @busy_runners.each() do |runner|
+      @runners_mutex.synchronize() do
+        (@busy_runners + @idle_runners).each() do |runner|
           runner.stop()
         end
       end
     end
 
-    def try_stop()
-      if !busy?()
-        stop()
-        return true
-      end
-
-      return false
-    end
-
     def jobs_left()
-      @duties_mutex.synchronize() do
-        return @unassigned_duties.size() + @busy_runners.size()
-      end
-    end
-
-    # Return true if at least one runner is busy
-    def busy?()
-      @duties_mutex.synchronize() do |runner|
-        return true if runner.busy?()
-      end
-
-      return false
+      return assign_duties_count()
     end
 
     private
-    HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
-
     PARALLELISM_MODEL_THREADS = 'thread'
     PARALLELISM_MODEL_PROCESSES = 'process'
+
+    alias allocate_duties start
+
+    # Create as many runners as possible, capped by the max_concurrents_duties
+    # configuration value.
+    # Return the number of created runners.
+    def create_needed_runners()
+      @runners_mutex.synchronize() do
+        nb_runners = @idle_runners.size() + @busy_runners.size()
+        nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
+
+        nb_runners_to_create.times do
+          @idle_runners << spawn_adept_runner()
+        end
+      end
+    end
 
     def spawn_adept_runner()
       adept_runner = nil
@@ -255,11 +168,12 @@ module Spawner
       return adept_runner
     end
 
-    def report_duty_completion(duty_id, returned_value)
-      adept_runner = nil
-
-      @duties_mutex.synchronize() do
+    def report_duty_end(duty_id)
+      @runners_mutex.synchronize() do
         runner = @busy_runners.delete(duty_id)
+
+        raise "The busy runners list is corrupted, please report this" if runner.nil?()
+
         @idle_runners << runner
       end
 
@@ -267,32 +181,15 @@ module Spawner
       harvest_supernumerary_runners()
       allocate_duties()
 
-      # The tests below are needed to avoid waking the thread for nothing just
-      # before he stops
-      if !@joining_thread.nil?()
-        @joining_thread_mutex.lock()
-
-        if @joining_thread_stopping
-          @joining_thread_mutex.unlock()
-
-          # Wait for the worker to stop for real...this shouldn't be too long
-          while !@joining_thread.stop?()
-            Thread.pass()
-          end
-
-        # If we are trying to join, let him wake up to test if he may return
-        else
-          @joining_thread_mutex.unlock()
-        end
-
-        @joining_thread.run()
+      @runners_mutex.synchronize() do
+        @no_more_duty_cond.signal()
       end
     end
 
     # Handle the possible change of the max concurrent duties configuration property.
     def harvest_supernumerary_runners()
-      @duties_mutex.synchronize() do
-        available_runners = @idle_runners.size() + @busy_runners.size() + @living_dead_runners.size()
+      @runners_mutex.synchronize() do
+        available_runners = @idle_runners.size() + @busy_runners.size()
         max_concurrents_duties = @config['max_concurrents_duties']
 
         if available_runners > max_concurrents_duties

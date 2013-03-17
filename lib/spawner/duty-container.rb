@@ -5,8 +5,6 @@ module Spawner
   # handle workers persistency. Otherwise, we would not be able to hotswap a
   # DRb-exposed duty with another.
   class DutyContainer
-    attr_reader :duty
-
     def initialize()
       @duty = nil
       @duty_mutex = Mutex.new()

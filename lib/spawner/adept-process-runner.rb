@@ -23,6 +23,8 @@ module Spawner
         Process.kill("KILL", @adept_process_id) rescue Errno::ESRCH
         @adept_process_id = nil
       end
+
+      super()
     end
 
     def alive?()

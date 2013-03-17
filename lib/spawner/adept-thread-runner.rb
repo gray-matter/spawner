@@ -1,4 +1,5 @@
 require 'adept-runner'
+require 'thread'
 
 module Spawner
   class AdeptThreadRunner < AdeptRunner
@@ -6,35 +7,49 @@ module Spawner
     def initialize()
       super()
       @adept_thread = nil
+      @no_more_duty_cond = ConditionVariable.new()
+      @adept = Adept.new()
     end
 
     def start(persistent_worker)
-      # Thread.stop when the job is done, modify the job and run
       @adept_thread = Thread.new() do
-        begin
-          duty = @duty_container.get_duty()
+        Thread.abort_on_exception = true
+        @job_mutex.synchronize() do
+          begin
+            duty = @duty_container.get_duty()
 
-          # FIXME : possible deadlock ?
+            raise "Popping for #{object_id} gives nil" if duty.nil?()
 
-          if duty.nil?()
-            Thread.stop()
-          else
             begin
               @adept.give_duty(duty)
             rescue Exception => e
               duty.report_failure(e)
             end
-          end
-        end while persistent_worker
+
+            @no_more_duty_cond.wait(@job_mutex) if persistent_worker
+          end while persistent_worker
+        end
       end
     end
 
     def stop()
-      @adept_thread.kill() unless @adept_thread.nil?()
+      unless @adept_thread.nil?()
+        @adept_thread.kill()
+      end
+
+      super()
+    end
+
+    def to_s()
+      return "#<AdeptThreadRunner: thread id = #{@adept_thread.object_id}>"
     end
 
     def wake_up()
-      @adept_thread.run() unless @adept_thread.nil?()
+      Thread.new() do
+        @job_mutex.synchronize() do
+          @no_more_duty_cond.signal()
+        end
+      end
     end
 
     def alive?()
