@@ -61,9 +61,6 @@ Signal.trap('TERM') do
 end
 
 worker_thread = Thread.new() do
-  # We want to catch anything BUT our own exceptions
-  Thread.current[:error_in_spawner] = true
-
   if !duty_container.nil?()
     adept = Spawner::Adept.new()
 
@@ -71,9 +68,7 @@ worker_thread = Thread.new() do
       begin
         duty = duty_container.get_duty()
 
-        Thread.current[:error_in_spawner] = false
         adept.give_duty(duty)
-        Thread.current[:error_in_spawner] = true
 
         # This is the single most important line of this whole script. If
         # there's nothing to do, release the mutex and wait patiently for
@@ -84,17 +79,8 @@ worker_thread = Thread.new() do
   end
 end
 
-begin
-  # Hack: if we don't specify a timeout, join will throw a "deadlock detected"
-  # exception when the worker thread hits the waiting part, thinking that
-  # we're waiting for something that will never happen, even though a "CONT"
-  # signal might (and should) wake it up.
-  worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
-rescue Exception => e
-  if worker_thread[:error_in_spawner]
-    # If this is an error related to the spawner itself, die
-    raise e
-  else
-    duty.report_failure(e) unless duty.nil?()
-  end
-end
+# Hack: if we don't specify a timeout, join will throw a "deadlock detected"
+# exception when the worker thread hits the waiting part, thinking that
+# we're waiting for something that will never happen, even though a "CONT"
+# signal might (and should) wake it up.
+worker_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)

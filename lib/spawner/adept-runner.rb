@@ -12,7 +12,6 @@ module Spawner
       @busy = false
       @job_mutex = Mutex.new()
       @duty_container = DutyContainer.new()
-      @duty_start_callback = Proc.new() {}
       @duty_completion_callback = Proc.new() {}
       @duty_failure_callback = Proc.new() {}
     end
@@ -28,7 +27,6 @@ module Spawner
         stop()
       end
 
-      duty.register_start_callback(method(:report_duty_start))
       duty.register_completion_callback(method(:report_duty_completion))
       duty.register_failure_callback(method(:report_duty_failure))
 
@@ -49,10 +47,6 @@ module Spawner
       @duty_completion_callback = callback
     end
 
-    def register_start_callback(callback)
-      @duty_start_callback = callback
-    end
-
     def register_failure_callback(callback)
       @duty_failure_callback = callback
     end
@@ -66,16 +60,12 @@ module Spawner
       not_implemented()
     end
 
-    def report_duty_start(id)
-      @duty_start_callback.call(id)
-    end
-
-    def report_duty_completion(id, return_value)
+    def report_duty_completion(id, returned_value, expected_value)
       @job_mutex.synchronize() do
         @busy = false
       end
 
-      @duty_completion_callback.call(id, return_value)
+      @duty_completion_callback.call(id, returned_value, expected_value)
     end
 
     def report_duty_failure(id)

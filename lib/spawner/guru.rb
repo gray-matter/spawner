@@ -16,11 +16,6 @@ module Spawner
       # List of unassigned duties' id
       @unassigned_duties_id = Array.new()
 
-      @duties_start_time = Hash.new()
-      @duties_end_time = Hash.new()
-
-      @duties_expected_value = Hash.new()
-
       @current_duty_id = 1
 
       @duty_end_callback = Proc.new() {}
@@ -35,12 +30,11 @@ module Spawner
         @current_duty_id += 1
       end
 
-      duty = Duty.new(duty_id, instructions)
+      duty = Duty.new(duty_id, instructions, expected_value)
 
       @duties_mutex.synchronize() do
         @unassigned_duties_id << duty_id
         @duties[duty_id] = duty
-        @duties_expected_value[duty_id] = expected_value
       end
     end
 
@@ -56,7 +50,6 @@ module Spawner
           duty = @duties[duty_id]
           runner = runners[nb_assigned_duties]
 
-          runner.register_start_callback(method(:report_duty_start))
           runner.register_completion_callback(method(:report_duty_completion))
           runner.register_failure_callback(method(:report_duty_failure))
 
@@ -71,10 +64,11 @@ module Spawner
 
     def duty_completion_time(duty_id)
       @duties_mutex.synchronize() do
-        raise "Duty not started yet" if !@duties_start_time.has_key?(duty_id)
-        raise "Duty not completed yet" if !@duties_end_time.has_key?(duty_id)
+        duty = @duties[duty_id]
 
-        return @duties_end_time[duty_id] - @duties_start_time[duty_id]
+        return nil if duty.start_time.nil?() || duty.end_time.nil?()
+
+        return duty.end_time.to_i() - duty.start_time.to_i()
       end
     end
 
@@ -110,26 +104,17 @@ module Spawner
 
     private
 
-    def report_duty_start(duty_id)
+    def report_duty_completion(duty_id, returned_value, expected_value)
       @duties_mutex.synchronize() do
-        @duties_start_time[duty_id] = Time.now()
-      end
-    end
-
-    def report_duty_completion(duty_id, returned_value)
-      @duties_mutex.synchronize() do
-        @duties_end_time[duty_id] = Time.now()
         @duties.delete(duty_id)
 
-        if returned_value != @duties_expected_value[duty_id]
+        if returned_value != expected_value
           Spawner.jobs_logger.info("The duty #{duty_id} returned " +
                                    "#{returned_value.inspect()} while it was expected " +
-                                   "to return #{@duties_expected_value[duty_id].inspect()}")
+                                   "to return #{expected_value.inspect()}")
 
           # FIXME: do something; try again or discard
         end
-
-        @duties_expected_value.delete(duty_id)
       end
 
 #      Thread.new() do
@@ -139,10 +124,7 @@ module Spawner
 
     def report_duty_failure(duty_id, exception)
       @duties_mutex.synchronize() do
-        @duties_start_time.delete(duty_id)
-        @duties_end_time.delete(duty_id)
         @unassigned_duties_id << duty_id
-        @duties_expected_value.delete(duty_id)
       end
 
 #      Thread.new() do

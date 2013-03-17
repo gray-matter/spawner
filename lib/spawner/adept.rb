@@ -21,7 +21,13 @@ module Spawner
       # FIXME : this will be a proc anytime, which can be a problem if it
       # contains a return statement.
       instructions = eval(duty.get_instructions())
-      ret = instructions.call()
+
+      begin
+        ret = instructions.call()
+      rescue Exception => e
+        duty.report_failure(e)
+      end
+
       duty.report_completion(ret)
     end
   end
