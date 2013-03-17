@@ -16,15 +16,15 @@ module Spawner
   # The Conductor is the emerged part of the spawner library.
   # It is in charge of creating (aka recruiting) adepts whenever needed.
   class Conductor
-    private
-    HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
-
     public
-    def initialize(config_file_name)
+    PARALLELISM_MODEL_THREADS = 'thread'
+    PARALLELISM_MODEL_PROCESSES = 'process'
+
+    def initialize()
       Thread.abort_on_exception = true
 
-      @config = Configuration.new()
-      reload_config(config_file_name)
+      @config = Configuration.new(EXPECTED_CONFIGURATION_KEYS)
+      @config_mutex = Mutex.new()
 
       @stopping = false
 
@@ -57,14 +57,36 @@ module Spawner
       allocate_duties() if perform_now
     end
 
-    def reload_config(config_file_name = nil)
-      @config.reload(config_file_name)
+    # Called without argument, this will reload the previous configuration
+    # file, if any
+    def load_config_from_yaml_file(config_file_name = nil)
+      @config_mutex.synchronize() do
+        old_configuration = @config
 
-      Spawner.set_internal_log_file(@config['spawner_log_file_name'])
-      Spawner.set_jobs_log_file(@config['jobs_log_file_name'])
+        begin
+          @config.reload(config_file_name)
+        rescue Exception => e
+          handle_corrupted_config(e)
+        end
 
-      # FIXME: if the parallelism model changes, terminate every runner which
-      # runs with the old model
+        on_configuration_reloaded(old_configuration, @config)
+      end
+    end
+
+    alias reload_config load_config_from_yaml_file
+
+    def load_config_from_hash(config_hash)
+      @config_mutex.synchronize() do
+        old_configuration = @config
+
+        begin
+          @config.load_from_hash(config_hash)
+        rescue Exception => e
+          handle_corrupted_config(e)
+        end
+
+        on_configuration_reloaded(old_configuration, @config)
+      end
     end
 
     def join()
@@ -106,7 +128,7 @@ module Spawner
       create_needed_runners()
 
       @runners_mutex.synchronize() do
-        duty_id_to_runner_mapping = @guru.assign_duties(@idle_runners, @config['persistent_workers'])
+        duty_id_to_runner_mapping = @guru.assign_duties(@idle_runners, @config[:persistent_workers])
 
         if !duty_id_to_runner_mapping.empty?()
           @idle_runners -= duty_id_to_runner_mapping.values()
@@ -132,8 +154,8 @@ module Spawner
     end
 
     private
-    PARALLELISM_MODEL_THREADS = 'thread'
-    PARALLELISM_MODEL_PROCESSES = 'process'
+    HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
+    EXPECTED_CONFIGURATION_KEYS = [:max_concurrents_duties, :parallelism_model, :persistent_workers]
 
     alias allocate_duties start
 
@@ -143,7 +165,7 @@ module Spawner
     def create_needed_runners()
       @runners_mutex.synchronize() do
         nb_runners = @idle_runners.size() + @busy_runners.size()
-        nb_runners_to_create = @config['max_concurrents_duties'].to_i() - nb_runners
+        nb_runners_to_create = @config[:max_concurrents_duties].to_i() - nb_runners
 
         nb_runners_to_create.times do
           @idle_runners << spawn_adept_runner()
@@ -153,7 +175,7 @@ module Spawner
 
     def spawn_adept_runner()
       adept_runner = nil
-      parallelism_model = @config['parallelism_model']
+      parallelism_model = @config[:parallelism_model]
 
       # TODO : allow an arbitrary runner model to be added (eg. over SSH)
       case parallelism_model
@@ -190,7 +212,7 @@ module Spawner
     def harvest_supernumerary_runners()
       @runners_mutex.synchronize() do
         available_runners = @idle_runners.size() + @busy_runners.size()
-        max_concurrents_duties = @config['max_concurrents_duties']
+        max_concurrents_duties = @config[:max_concurrents_duties]
 
         if available_runners > max_concurrents_duties
           nb_removable_items = [@idle_runners.size(), available_runners - max_concurrents_duties].min()
@@ -202,6 +224,29 @@ module Spawner
           @idle_runners = @idle_runners[nb_removable_items..-1]
         end
       end
+    end
+
+    def handle_corrupted_config(exc)
+      Spawner.internal_logger.error(exc) unless Spawner.internal_logger.nil?()
+
+      # If there's no configuration at all, crash; otherwise, use the last
+      # known configuration
+      raise exc unless @config.valid?()
+    end
+
+    def on_configuration_reloaded(old_configuration, new_configuration)
+      # There's no need to reload the logger if the path has not changed !
+      if @config[:spawner_log_file_name] != old_configuration[:spawner_log_file_name]
+        Spawner.set_internal_log_file(@config[:spawner_log_file_name])
+      end
+
+      # Same as above
+      if @config[:jobs_log_file_name] != old_configuration[:jobs_log_file_name]
+        Spawner.set_jobs_log_file(@config[:jobs_log_file_name])
+      end
+
+      # FIXME: if the parallelism model changes, terminate every runner which
+      # runs with the old model
     end
   end
 end

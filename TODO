@@ -12,4 +12,3 @@
  - Test different values of perform_now
  - Use a mixin for the completion/failure/start pattern ?
  - Move report stuff to the container, since the duty can be invalid !
- - Allow configuring the app with something else than a file

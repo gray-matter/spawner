@@ -7,13 +7,10 @@ module Spawner
   autoload :Adept, 'spawner/adept'
 
   public
-  def self.internal_logger()
-    return @@internal_logger
-  end
+  @internal_logger = nil
+  @jobs_logger = nil
 
-  def self.jobs_logger()
-    return @@jobs_logger
-  end
+  class << self; attr_reader :internal_logger; attr_reader :jobs_logger; end
 
   def self.set_internal_log_file(file_name)
     @@internal_logger = logger_from_file_name(file_name, STDOUT)
