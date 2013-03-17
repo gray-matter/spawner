@@ -59,7 +59,7 @@ module Spawner
 
     # Called without argument, this will reload the previous configuration
     # file, if any
-    def load_config_from_yaml_file(config_file_name = nil)
+    def load_config_from_file(config_file_name = nil)
       @config_mutex.synchronize() do
         old_configuration = @config
 
@@ -73,7 +73,7 @@ module Spawner
       end
     end
 
-    alias reload_config load_config_from_yaml_file
+    alias reload_config load_config_from_file
 
     def load_config_from_hash(config_hash)
       @config_mutex.synchronize() do

@@ -1,5 +1,7 @@
 spawner
 =======
+/!\ This is still a WIP project, release coming soon /!\
+
 The spawner lets you parallelize anything, using either threads or
 processes. All you need is to write the code to run, configure a few values and
 let the magic happen !
@@ -16,10 +18,12 @@ Using the spawner as a class
 require 'spawner'
 
 EXPECTED_RETURN = 0
-s = Spawner::Conductor.new('/path/to/config.yml')
+s = Spawner::Conductor.new()
+s.load_config_from_file('/path/to/config.yml')
 1.upto(10) do |i|
   s.add_duty(EXPECTED_RETURN) do
     puts "Task #{i}"
+    0
   end
 end
 s.join()
@@ -45,5 +49,4 @@ You have the ability to tweak the spawner in various ways, including :
 * choosing to run the code in threads or processes
 * setting the number of simultaneous running workers
 
-This gem comes with a [template configuration
-file](/etc/config.yml).
+This gem comes with a [template configuration file](/etc/config.yml).
