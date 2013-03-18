@@ -8,54 +8,64 @@ require 'spawner'
 module GenericFunctionalTestsMixin
   public
   def generate_spawner(max_concurrents_duties, persistent_workers,
-                       spawner_log_file_name = "/dev/null",
-                       jobs_log_file_name = "/dev/null")
+                       jobs_log_file_name = "/dev/null",
+                       spawner_log_file_name = "/dev/null")
     s = Spawner::Conductor.new()
-    s.load_config_from_hash({:max_concurrents_duties => 3,
+    s.load_config_from_hash({:max_concurrents_duties => max_concurrents_duties,
                              :parallelism_model => self.class.parallelism_model,
                              :persistent_workers => persistent_workers,
                              :spawner_log_file_name => spawner_log_file_name,
-                             :internal_log_file_name => jobs_log_file_name
+                             :jobs_log_file_name => jobs_log_file_name
                             })
 
     return s
   end
 
-  def generate_empty_tasks_test(nb_tasks, max_concurrents_duties,
-                                persistent_workers, perform_now, timeout_seconds)
+  def generate_empty_tasks_test(spawner, nb_tasks, perform_now, timeout_seconds)
     Timeout::timeout(timeout_seconds) do
-      s = generate_spawner(max_concurrents_duties, persistent_workers)
-
       nb_tasks.times() do
-        s.add_duty(nil) do
+        spawner.add_duty(nil) do
         end
       end
 
-      s.join()
+      spawner.join()
     end
   end
 
-  def test_no_task_finishes()
+  def setup()
+    @spawner_log_file = Tempfile.new('spawner_log')
+    @jobs_log_file = Tempfile.new('jobs_log')
+  end
+
+  # Test that the spawner works as expected when given no task and asked to join
+  def test_no_task()
     [0, 10].each() do |concurrent_duties|
       [true, false].each() do |persistent_workers|
         [true, false].each() do |perform_now|
-          assert_nothing_thrown do
-            generate_empty_tasks_test(0, concurrent_duties, persistent_workers,
-                                      perform_now, 2)
+          assert_nothing_thrown() do
+            s = generate_spawner(concurrent_duties, persistent_workers,
+                                 @jobs_log_file.path())
+            generate_empty_tasks_test(s, 0, perform_now, 2)
           end
+
+          assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
         end
       end
     end
   end
 
-  def test_empty_task_finishes()
+  # Test that if the spawner works as expected when given empty tasks
+  def test_empty_tasks()
     [3, 10].each() do |concurrent_duties|
       [true, false].each() do |persistent_workers|
         [true, false].each() do |perform_now|
-          assert_nothing_thrown do
-            generate_empty_tasks_test(10, concurrent_duties,
-                                      persistent_workers, perform_now, 3)
+          assert_nothing_thrown() do
+            s = generate_spawner(concurrent_duties, persistent_workers,
+                                 @jobs_log_file.path())
+            generate_empty_tasks_test(s, 10, perform_now, 3)
           end
+
+          assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
         end
       end
     end
