@@ -1,14 +1,9 @@
- - Add tests with various behaviours and test for each with one worker, a few
- and more than the count of jobs, handle timeouts
  - How to avoid living-dead processes ?
- - Add an at_exit handler to handle suicidal duties
  - Test that there are not more than "concurrent duties" duties at any time
  - Proper logging
  - Make it work under Windows
- - Test with and without persistency
  - Stop cleanly
  - Make this a gem !
  - Handle return in the given block (transform into a lambda)
- - Test different values of perform_now
  - Use a mixin for the completion/failure/start pattern ?
- - Move report stuff to the container, since the duty can be invalid !
+ - Test configuration stuff: mandatory & optional fields handling + recover from bad config
