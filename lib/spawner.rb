@@ -16,16 +16,12 @@ module Spawner
     @jobs_logger = logger_from_file_name(file_name, STDOUT)
   end
 
-  def self.set_spawner_log_file(file_name)
-    @spawner_logger = logger_from_file_name(file_name, STDOUT)
-  end
-
   def self.jobs_logger()
     @jobs_logger
   end
 
   def self.spawner_logger()
-    @jobs_logger
+    @spawner_logger
   end
 
   private
@@ -39,10 +35,11 @@ module Spawner
       output_stream = File.new(file_name, "w")
     end
 
-    @@logger_mutex ||= Mutex.new()
-
-    @@logger_mutex.synchronize() do
-      return Logger.new(output_stream)
+    logger = Logger.new(output_stream)
+    logger.formatter = Proc.new() do |sev, date, prog_name, msg|
+      "[#{sev}][#{date}] #{msg}"
     end
+
+    return logger
   end
 end
