@@ -7,6 +7,7 @@ module Spawner
       @config_mutex = Mutex.new()
       @config_file_name = nil
       @expected_keys = expected_keys
+      @config = nil
     end
 
     def load_from_hash(config_hash)
@@ -40,22 +41,45 @@ module Spawner
       end
     end
 
-    def valid?()
-      @config_mutex.synchronize() do
-        return !@config.nil?() && (@expected_keys - @config.keys).empty?()
+    def each(&block)
+      if block_given?()
+        @config.each() do |k, v|
+          yield k, v
+        end
+      else
+        @config.each()
       end
     end
 
-    private
+    def valid?()
+      @config_mutex.synchronize() do
+        return !@config.nil?() && missing_keys(@config).empty?()
+      end
+    end
+
+    def clone()
+      res = self.class().new(@expected_keys.clone())
+      res.config = self.config.clone() unless self.config.nil?()
+
+      return res
+    end
+
+    protected
+    attr_accessor :config
+
     def symbolize_keys(hash)
       return Hash[hash.map{ |k, v| [k.to_sym, v] }]
     end
 
-    def validate_config(new_config)
-      missing_keys = @expected_keys - new_config.keys()
+    def missing_keys(config)
+      return @expected_keys - config.keys
+    end
 
-      if !missing_keys.empty?()
-        raise "Bad configuration file: missing the #{missing_keys.join(', ')} key(s)"
+    def validate_config(new_config)
+      missing = missing_keys(new_config)
+
+      if !missing.empty?()
+        raise "Bad configuration file: missing the #{missing.join(', ')} key(s)"
       end
     end
   end

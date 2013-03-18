@@ -3,21 +3,29 @@ $LOAD_PATH.unshift("#{File.dirname(__FILE__)}")
 require 'logger'
 
 module Spawner
+  public
+
   autoload :Conductor, 'spawner/conductor'
   autoload :Adept, 'spawner/adept'
 
-  public
-  @internal_logger = nil
-  @jobs_logger = nil
-
-  class << self; attr_reader :internal_logger; attr_reader :jobs_logger; end
-
-  def self.set_internal_log_file(file_name)
-    @@internal_logger = logger_from_file_name(file_name, STDOUT)
+  def self.set_spawner_log_file(file_name)
+    @spawner_logger = logger_from_file_name(file_name, STDOUT)
   end
 
   def self.set_jobs_log_file(file_name)
-    @@jobs_logger = logger_from_file_name(file_name, STDOUT)
+    @jobs_logger = logger_from_file_name(file_name, STDOUT)
+  end
+
+  def self.set_spawner_log_file(file_name)
+    @spawner_logger = logger_from_file_name(file_name, STDOUT)
+  end
+
+  def self.jobs_logger()
+    @jobs_logger
+  end
+
+  def self.spawner_logger()
+    @jobs_logger
   end
 
   private

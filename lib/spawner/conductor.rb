@@ -47,7 +47,7 @@ module Spawner
     # or not, depending on the value of +perform_now+.
     def add_duty(expected_value = nil, perform_now = true, &instructions)
       if @stopping
-        Spawner.internal_logger.info("Server stopping...discarding this job")
+        Spawner.spawner_logger.info("Server stopping...discarding this job")
       end
 
       @runners_mutex.synchronize() do
@@ -61,7 +61,7 @@ module Spawner
     # file, if any
     def load_config_from_file(config_file_name = nil)
       @config_mutex.synchronize() do
-        old_configuration = @config
+        old_configuration = @config.clone()
 
         begin
           @config.reload(config_file_name)
@@ -77,7 +77,7 @@ module Spawner
 
     def load_config_from_hash(config_hash)
       @config_mutex.synchronize() do
-        old_configuration = @config
+        old_configuration = @config.clone()
 
         begin
           @config.load_from_hash(config_hash)
@@ -140,7 +140,7 @@ module Spawner
     def stop()
       @stopping = true
 
-      Spawner.internal_logger.info("Now stopping...")
+      Spawner.spawner_logger.info("Now stopping...")
 
       @runners_mutex.synchronize() do
         (@busy_runners + @idle_runners).each() do |runner|
@@ -227,7 +227,7 @@ module Spawner
     end
 
     def handle_corrupted_config(exc)
-      Spawner.internal_logger.error(exc) unless Spawner.internal_logger.nil?()
+      Spawner.spawner_logger.error(exc) unless Spawner.spawner_logger.nil?()
 
       # If there's no configuration at all, crash; otherwise, use the last
       # known configuration
@@ -236,13 +236,13 @@ module Spawner
 
     def on_configuration_reloaded(old_configuration, new_configuration)
       # There's no need to reload the logger if the path has not changed !
-      if @config[:spawner_log_file_name] != old_configuration[:spawner_log_file_name]
-        Spawner.set_internal_log_file(@config[:spawner_log_file_name])
-      end
+      [[:jobs_log_file_name, :set_jobs_log_file],
+       [:spawner_log_file_name, :set_spawner_log_file]].each() do |vals|
+        key, meth = vals
 
-      # Same as above
-      if @config[:jobs_log_file_name] != old_configuration[:jobs_log_file_name]
-        Spawner.set_jobs_log_file(@config[:jobs_log_file_name])
+        if !old_configuration.valid?() || new_configuration[key] != old_configuration[key]
+          Spawner.send(meth, new_configuration[key])
+        end
       end
 
       # FIXME: if the parallelism model changes, terminate every runner which
