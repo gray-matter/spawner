@@ -10,10 +10,20 @@ module Spawner
 
   def self.set_spawner_log_file(file_name)
     @spawner_logger = logger_from_file_name(file_name, STDOUT)
+
+    @spawner_logger.formatter = Proc.new() do |sev, date, prog_name, msg|
+      "[#{sev}][#{date}] #{msg}"
+    end
   end
 
   def self.set_jobs_log_file(file_name)
     @jobs_logger = logger_from_file_name(file_name, STDOUT)
+
+    # There's a slight subtlety: jobs will add a last markup to display their
+    # PID or Thread id, so don't put a space before the message
+    @jobs_logger.formatter = Proc.new() do |sev, date, prog_name, msg|
+      "[#{sev}][#{date}]#{msg}"
+    end
   end
 
   def self.jobs_logger()
@@ -36,9 +46,6 @@ module Spawner
     end
 
     logger = Logger.new(output_stream)
-    logger.formatter = Proc.new() do |sev, date, prog_name, msg|
-      "[#{sev}][#{date}] #{msg}"
-    end
 
     return logger
   end
