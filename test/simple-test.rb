@@ -9,7 +9,7 @@ s.load_config_from_hash({
                           :max_concurrents_duties => 3,
                           :parallelism_model => 'thread',
                           :persistent_workers => true,
-                          :spawner_log_file_name => '/tmp/jobs_log',
+                          :jobs_log_file_name => '/tmp/jobs_log',
                           :internal_log_file_name => '/tmp/internal_log'
                         })
 
