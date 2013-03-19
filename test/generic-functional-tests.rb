@@ -21,11 +21,10 @@ module GenericFunctionalTestsMixin
     return s
   end
 
-  def generate_empty_tasks_test(spawner, nb_tasks, perform_now, timeout_seconds)
+  def generate_tasks_addition(spawner, nb_tasks, perform_now, timeout_seconds, &block)
     Timeout::timeout(timeout_seconds) do
       nb_tasks.times() do
-        spawner.add_duty(nil) do
-        end
+        spawner.add_duty(nil, perform_now, &block)
       end
 
       spawner.join()
@@ -45,7 +44,7 @@ module GenericFunctionalTestsMixin
           assert_nothing_thrown() do
             s = generate_spawner(concurrent_duties, persistent_workers,
                                  @jobs_log_file.path())
-            generate_empty_tasks_test(s, 0, perform_now, 2)
+            generate_tasks_addition(s, 0, perform_now, 2) {}
           end
 
           assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
@@ -62,12 +61,20 @@ module GenericFunctionalTestsMixin
           assert_nothing_thrown() do
             s = generate_spawner(concurrent_duties, persistent_workers,
                                  @jobs_log_file.path())
-            generate_empty_tasks_test(s, 10, perform_now, 3)
+            generate_tasks_addition(s, 10, perform_now, 3) {}
           end
 
           assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
         end
       end
+    end
+  end
+
+  # Test that the spawner handles return statements in the instructions block
+  def test_return_in_job()
+    assert_nothing_thrown() do
+      s = generate_spawner(1, false)
+      generate_tasks_addition(s, 1, true, 2) {return 42}
     end
   end
 end
