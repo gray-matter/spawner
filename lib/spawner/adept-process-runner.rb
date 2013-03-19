@@ -84,9 +84,9 @@ module Spawner
           rescue Errno::EAGAIN, EOFError
           end
 
-          # FIXME: format the output to display the job id
-          Spawner.jobs_logger.info(my_out.readline()) if out_to_read
-          Spawner.jobs_logger.error(my_err.readline()) if err_to_read
+          prefix = "[PID ##{@adept_process_id.to_i()}] "
+          Spawner.jobs_logger.debug(prefix + my_out.readline()) if out_to_read
+          Spawner.jobs_logger.error(prefix + my_err.readline()) if err_to_read
 
           IO.select([my_out, my_err]) unless out_to_read || err_to_read
         end
