@@ -12,7 +12,7 @@ module Spawner
     @spawner_logger = logger_from_file_name(file_name, STDOUT)
 
     @spawner_logger.formatter = Proc.new() do |sev, date, prog_name, msg|
-      "[#{sev}][#{date}] #{msg}"
+      "[#{sev}][#{date}] #{msg}\n"
     end
   end
 
@@ -22,7 +22,7 @@ module Spawner
     # There's a slight subtlety: jobs will add a last markup to display their
     # PID or Thread id, so don't put a space before the message
     @jobs_logger.formatter = Proc.new() do |sev, date, prog_name, msg|
-      "[#{sev}][#{date}]#{msg}"
+      "[#{sev}][#{date}]#{msg}\n"
     end
   end
 
