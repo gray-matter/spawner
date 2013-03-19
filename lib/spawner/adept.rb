@@ -18,9 +18,10 @@ module Spawner
     private
 
     def perform_duty(duty)
-      # FIXME : this will be a proc anytime, which can be a problem if it
-      # contains a return statement.
-      instructions = eval(duty.get_instructions())
+      # This will be a proc everytime, which can be a problem if it
+      # contains a return statement => transform into a lambda
+      instructions_str = duty.get_instructions().sub('proc', 'lambda')
+      instructions = eval(instructions_str)
 
       begin
         ret = instructions.call()
