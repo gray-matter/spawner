@@ -47,7 +47,7 @@ module Spawner
     # or not, depending on the value of +perform_now+.
     def add_duty(expected_value = nil, perform_now = true, &instructions)
       if @stopping
-        Spawner.spawner_logger.info("Server stopping...discarding this job")
+        Spawner.spawner_logger.info("Server stopping...discarding this job\n")
       end
 
       @runners_mutex.synchronize() do
@@ -140,7 +140,7 @@ module Spawner
     def stop()
       @stopping = true
 
-      Spawner.spawner_logger.info("Now stopping...")
+      Spawner.spawner_logger.info("Now stopping...\n")
 
       @runners_mutex.synchronize() do
         (@busy_runners + @idle_runners).each() do |runner|
@@ -227,7 +227,7 @@ module Spawner
     end
 
     def handle_corrupted_config(exc)
-      Spawner.spawner_logger.error(exc) unless Spawner.spawner_logger.nil?()
+      Spawner.spawner_logger.error("Corrupted configuration: #{exc}\n") unless Spawner.spawner_logger.nil?()
 
       # If there's no configuration at all, crash; otherwise, use the last
       # known configuration

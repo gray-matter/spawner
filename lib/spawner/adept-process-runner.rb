@@ -85,8 +85,8 @@ module Spawner
           end
 
           prefix = "[PID ##{@adept_process_id.to_i()}] "
-          Spawner.jobs_logger.debug(prefix + my_out.readline()) if out_to_read
-          Spawner.jobs_logger.error(prefix + my_err.readline()) if err_to_read
+          Spawner.jobs_logger.debug(prefix + my_out.readline() + "\n") if out_to_read
+          Spawner.jobs_logger.error(prefix + my_err.readline() + "\n") if err_to_read
 
           IO.select([my_out, my_err]) unless out_to_read || err_to_read
         end

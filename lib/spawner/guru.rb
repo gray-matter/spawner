@@ -111,7 +111,7 @@ module Spawner
         if returned_value != expected_value
           Spawner.jobs_logger.info("The duty #{duty_id} returned " +
                                    "#{returned_value.inspect()} while it was expected " +
-                                   "to return #{expected_value.inspect()}")
+                                   "to return #{expected_value.inspect()}\n")
 
           # FIXME: do something; try again or discard
         end
@@ -122,8 +122,8 @@ module Spawner
 #      end
     end
 
-    def report_duty_failure(duty_id, exception)
-      Spawner.jobs_logger.error("The job #{duty_id} failed with the following exception: #{e}")
+    def report_duty_failure(duty_id, exc)
+      Spawner.jobs_logger.error("The job #{duty_id} failed with the following exception: #{exc}\n")
 
       @duties_mutex.synchronize() do
         @unassigned_duties_id << duty_id
