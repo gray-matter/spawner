@@ -45,6 +45,8 @@ module Spawner
       output_stream = File.new(file_name, "w")
     end
 
+    output_stream.sync = true
+
     logger = Logger.new(output_stream)
 
     return logger
