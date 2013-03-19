@@ -68,8 +68,8 @@ module Spawner
       @duty_completion_callback.call(id, returned_value, expected_value)
     end
 
-    def report_duty_failure(id)
-      @duty_failure_callback.call(id)
+    def report_duty_failure(id, exception)
+      @duty_failure_callback.call(id, exception)
     end
 
     def wake_up()

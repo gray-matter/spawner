@@ -123,6 +123,8 @@ module Spawner
     end
 
     def report_duty_failure(duty_id, exception)
+      Spawner.jobs_logger.error("The job #{duty_id} failed with the following exception: #{e}")
+
       @duties_mutex.synchronize() do
         @unassigned_duties_id << duty_id
       end
