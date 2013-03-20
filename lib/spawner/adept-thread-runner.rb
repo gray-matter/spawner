@@ -1,6 +1,5 @@
 require 'adept-runner'
 require 'thread'
-require 'string-io-redirector'
 
 module Spawner
   class AdeptThreadRunner < AdeptRunner
@@ -54,7 +53,7 @@ module Spawner
             end while persistent_worker
           end
         rescue Exception => e
-          Spawner.spawner_logger.error("Exception raised in the thread runner: #{e}\n")
+          Spawner.spawner_logger.error("Exception raised in the thread runner: #{e} (#{e.backtrace().join("\n")})\n")
         end
       end
     end
