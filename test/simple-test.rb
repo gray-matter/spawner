@@ -16,7 +16,7 @@ s.load_config_from_hash({
 
 1.upto(10) do |i|
   s.add_duty(0) do
-    $stderr.puts "+++++++++++++++++++ Job done at #$$, thread #{Thread.current.object_id()}"
+    $stderr.puts "+++++++++++++++++++ Job #{i} done at #$$, thread #{Thread.current.object_id()}"
     0
   end
 end

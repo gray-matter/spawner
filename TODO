@@ -7,4 +7,4 @@
  - Use a mixin for the completion/failure/start pattern ?
  - Test configuration stuff: mandatory & optional fields handling + recover from bad config
  - Implement the service version
- - Allow to define pseudo-variables for the block to play with
+ - Add a max retry for failed duties

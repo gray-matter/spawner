@@ -17,9 +17,9 @@ module Spawner
       @end_time = nil
     end
 
-    def get_instructions()
+    def get_instructions_and_binding()
       @start_time = Time.now()
-      return @instructions.to_source()
+      return @instructions.to_source(), @instructions.binding
     end
 
     def register_completion_callback(callback)
@@ -39,7 +39,9 @@ module Spawner
     end
 
     def report_failure(exception)
-      @duty_failure_callback.call(@id, exception)
+      Thread.new() do
+        @duty_failure_callback.call(@id, exception)
+      end
     end
   end
 end

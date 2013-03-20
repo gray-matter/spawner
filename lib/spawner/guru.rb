@@ -123,7 +123,7 @@ module Spawner
     end
 
     def report_duty_failure(duty_id, exc)
-      Spawner.jobs_logger.error("The job #{duty_id} failed with the following exception: #{exc}\n")
+      Spawner.jobs_logger.error(" The job #{duty_id} failed with the following exception: #{exc} (#{exc.backtrace().join("\n")})\n")
 
       @duties_mutex.synchronize() do
         @unassigned_duties_id << duty_id
