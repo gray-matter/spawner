@@ -194,7 +194,7 @@ module Spawner
       @runners_mutex.synchronize() do
         runner = @busy_runners.delete(duty_id)
 
-        raise "The busy runners list is corrupted, please report this" if runner.nil?()
+        raise "The busy runners list is corrupted, please report this (duty_id = #{duty_id})" if runner.nil?()
 
         @idle_runners << runner
       end
