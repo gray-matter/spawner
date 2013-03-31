@@ -6,12 +6,14 @@ require 'spawner'
 module GenericFunctionalTestsMixin
   public
   def generate_spawner(max_concurrents_duties, persistent_workers,
+                       max_retries = 0,
                        jobs_log_file_name = "/dev/null",
                        spawner_log_file_name = "/dev/null")
     s = Spawner::Conductor.new()
     s.load_config_from_hash({:max_concurrents_duties => max_concurrents_duties,
                              :parallelism_model => self.class.parallelism_model,
                              :persistent_workers => persistent_workers,
+                             :max_retries => max_retries,
                              :spawner_log_file_name => spawner_log_file_name,
                              :jobs_log_file_name => jobs_log_file_name
                             })
@@ -40,7 +42,7 @@ module GenericFunctionalTestsMixin
       [true, false].each() do |persistent_workers|
         [true, false].each() do |perform_now|
           assert_nothing_thrown() do
-            s = generate_spawner(concurrent_duties, persistent_workers,
+            s = generate_spawner(concurrent_duties, persistent_workers, 0,
                                  @jobs_log_file.path())
             generate_tasks_addition(s, 0, perform_now, 2) {}
           end
@@ -57,7 +59,7 @@ module GenericFunctionalTestsMixin
       [true, false].each() do |persistent_workers|
         [true, false].each() do |perform_now|
           assert_nothing_thrown() do
-            s = generate_spawner(concurrent_duties, persistent_workers,
+            s = generate_spawner(concurrent_duties, persistent_workers, 0,
                                  @jobs_log_file.path())
             generate_tasks_addition(s, 10, perform_now, 3) {}
           end
@@ -76,9 +78,17 @@ module GenericFunctionalTestsMixin
     end
   end
 
-  def test_failing_job()
+  def test_failing_job_without_retries()
     assert_nothing_thrown() do
-      s = generate_spawner(1, false)
+      s = generate_spawner(1, false, 0)
+      generate_tasks_addition(s, 1, true, 2) {plop}
+    end
+  end
+
+  def test_failing_job_with_retry()
+    # FIXME: check that the job has been effectively tried twice
+    assert_nothing_thrown() do
+      s = generate_spawner(1, false, 1)
       generate_tasks_addition(s, 1, true, 2) {plop}
     end
   end

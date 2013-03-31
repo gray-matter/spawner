@@ -23,7 +23,7 @@ module Spawner
     def initialize()
       Thread.abort_on_exception = true
 
-      @config = Configuration.new(EXPECTED_CONFIGURATION_KEYS)
+      @config = Configuration.new(EXPECTED_CONFIGURATION_KEYS, DEFAULT_CONFIGURATION_VALUES)
       @config_mutex = Mutex.new()
 
       @stopping = false
@@ -51,7 +51,7 @@ module Spawner
       end
 
       @runners_mutex.synchronize() do
-        @guru.add_duty(instructions, expected_value)
+        @guru.add_duty(instructions, expected_value, @config[:max_retries])
       end
 
       allocate_duties() if perform_now
@@ -128,7 +128,8 @@ module Spawner
       create_needed_runners()
 
       @runners_mutex.synchronize() do
-        duty_id_to_runner_mapping = @guru.assign_duties(@idle_runners, @config[:persistent_workers])
+        duty_id_to_runner_mapping = @guru.assign_duties(@idle_runners,
+                                                        @config[:persistent_workers])
 
         if !duty_id_to_runner_mapping.empty?()
           @idle_runners -= duty_id_to_runner_mapping.values()
@@ -156,6 +157,7 @@ module Spawner
     private
     HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
     EXPECTED_CONFIGURATION_KEYS = [:max_concurrents_duties, :parallelism_model, :persistent_workers]
+    DEFAULT_CONFIGURATION_VALUES = {:max_retries => 0}
 
     alias allocate_duties start
 

@@ -3,17 +3,18 @@ require 'yaml'
 module Spawner
   class Configuration
     public
-    def initialize(expected_keys)
+    def initialize(expected_keys, default_values)
       @config_mutex = Mutex.new()
       @config_file_name = nil
       @expected_keys = expected_keys
+      @default_values = default_values
       @config = nil
     end
 
     def load_from_hash(config_hash)
-      new_config = symbolize_keys(config_hash)
-      validate_config(config_hash)
-      @config = config_hash
+      new_config = fill_with_default_values(symbolize_keys(config_hash))
+      validate_config(new_config)
+      @config = new_config
     end
 
     def load_from_file(config_file_name = nil)
@@ -23,13 +24,14 @@ module Spawner
         begin
           new_config = symbolize_keys(YAML.load_file(config_file_name))
         rescue Exception => e
-          raise "Bad configuration file given #{e.to_s()}"
+          raise "Bad configuration file given: #{e.to_s()}"
         end
 
+        new_config = fill_with_default_values(new_config)
         validate_config(new_config)
 
         @config = new_config
-        @config_file_name = nil
+        @config_file_name = config_file_name
       end
     end
 
@@ -58,7 +60,7 @@ module Spawner
     end
 
     def clone()
-      res = self.class().new(@expected_keys.clone())
+      res = self.class().new(@expected_keys.clone(), @default_values.clone())
       res.config = self.config.clone() unless self.config.nil?()
 
       return res
@@ -81,6 +83,10 @@ module Spawner
       if !missing.empty?()
         raise "Bad configuration file: missing the #{missing.join(', ')} key(s)"
       end
+    end
+
+    def fill_with_default_values(config)
+      return @default_values.merge(config)
     end
   end
 end

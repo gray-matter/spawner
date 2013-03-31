@@ -6,5 +6,4 @@
  - Make this a gem !
  - Test configuration stuff: mandatory & optional fields handling + recover from bad config
  - Implement the service version
- - Add a max retry for failed duties
- - Provide a path to log files when a test fails
+ - Provide a path to log files when a test fails OR allow to write to a StringIO

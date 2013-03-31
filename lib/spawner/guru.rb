@@ -16,13 +16,15 @@ module Spawner
       # List of unassigned duties' id
       @unassigned_duties_id = Array.new()
 
+      @remaining_retries = Hash.new()
+
       @current_duty_id = 1
 
       @duty_end_callback = Proc.new() {}
     end
 
     # Add instructions for a duty to to be performed by adepts.
-    def add_duty(instructions, expected_value)
+    def add_duty(instructions, expected_value, max_retries)
       duty_id = nil
 
       @duties_mutex.synchronize() do
@@ -35,11 +37,13 @@ module Spawner
       @duties_mutex.synchronize() do
         @unassigned_duties_id << duty_id
         @duties[duty_id] = duty
+        @remaining_retries[duty.id] = max_retries
       end
     end
 
     # Assign as many as duties as possible to the given +runners+ and return the
-    # duty id to runner mapping.
+    # duty id to runner mapping. They will be configured to be +persistent+ or
+    # not, and will be allowed to fail at most +max_retries+ each.
     def assign_duties(runners, persistent)
       nb_assigned_duties = 0
       duty_id_to_runner_mapping = Hash.new()
@@ -106,14 +110,15 @@ module Spawner
 
     def report_duty_completion(duty_id, returned_value, expected_value)
       @duties_mutex.synchronize() do
-        @duties.delete(duty_id)
-
         if returned_value != expected_value
           Spawner.jobs_logger.info("The duty #{duty_id} returned " +
                                    "#{returned_value.inspect()} while it was expected " +
                                    "to return #{expected_value.inspect()}\n")
 
-          # FIXME: do something; try again or discard
+          handle_duty_failure(duty_id)
+        else
+          @duties.delete(duty_id)
+          @remaining_retries.delete(duty_id)
         end
       end
 
@@ -126,13 +131,25 @@ module Spawner
       Spawner.jobs_logger.error(" The job #{duty_id} failed with the following exception: #{exc} (#{exc.backtrace().join("\n")})\n")
 
       @duties_mutex.synchronize() do
-        @duties.delete(duty_id)
-        # @unassigned_duties_id << duty_id
+        handle_duty_failure(duty_id)
       end
 
 #      Thread.new() do
         @duty_end_callback.call(duty_id)
 #      end
+    end
+
+    # /!\ This method MUST BE called within a mutex lock block, since it is not
+    # thread-safe.
+    def handle_duty_failure(duty_id)
+      if @remaining_retries[duty_id] > 0
+        Spawner.jobs_logger.info("Retrying the duty #{duty_id} (#{@remaining_retries[duty_id]} retries remaining)")
+        @remaining_retries[duty_id] -= 1
+        @unassigned_duties_id << duty_id
+      else
+        @duties.delete(duty_id)
+        @remaining_retries.delete(duty_id)
+      end
     end
   end
 end
