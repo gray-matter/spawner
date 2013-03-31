@@ -77,6 +77,9 @@ module GenericFunctionalTestsMixin
   end
 
   def test_failing_job()
-    # TODO
+    assert_nothing_thrown() do
+      s = generate_spawner(1, false)
+      generate_tasks_addition(s, 1, true, 2) {plop}
+    end
   end
 end

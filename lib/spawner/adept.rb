@@ -30,9 +30,9 @@ module Spawner
         ret = instructions.call_with_binding(binding)
       rescue Exception => e
         duty.report_failure(e)
+      else
+        duty.report_completion(ret)
       end
-
-      duty.report_completion(ret)
     end
   end
 end
