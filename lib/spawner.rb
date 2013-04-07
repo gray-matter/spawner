@@ -5,8 +5,9 @@ require 'logger'
 module Spawner
   public
 
-  autoload :Conductor, 'spawner/conductor'
   autoload :Adept, 'spawner/adept'
+  autoload :Conductor, 'spawner/conductor'
+  autoload :Configuration, 'spawner/configuration'
 
   def self.set_spawner_log_file(file_name)
     @spawner_logger = logger_from_file_name(file_name, STDOUT)

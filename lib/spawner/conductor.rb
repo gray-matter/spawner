@@ -64,8 +64,8 @@ module Spawner
     #
     # Called with no argument, this will reload the previous configuration
     # file, if any.
-    def load_config_from_file(file_path = nil)
-      return load_config_from_source(@config.method(:reload), config_file_name)
+    def load_config_from_file(config_file_path = nil)
+      return load_config_from_source(@config.method(:reload), config_file_path)
     end
 
     alias reload_config load_config_from_file
@@ -97,16 +97,6 @@ module Spawner
           end
 
           break if shall_break
-        end
-
-        @runners_mutex.synchronize() do
-          @busy_runners.each() do |unused, runner|
-            runner.stop()
-          end
-
-          @idle_runners.each() do |runner|
-            runner.stop()
-          end
         end
       end
 
