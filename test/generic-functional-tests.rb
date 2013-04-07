@@ -78,6 +78,8 @@ module GenericFunctionalTestsMixin
     end
   end
 
+  # Test that a job with an error does not prevent the spawner from doing
+  # the other jobs, without retrying.
   def test_failing_job_without_retries()
     assert_nothing_thrown() do
       s = generate_spawner(1, false, 0)
@@ -85,8 +87,11 @@ module GenericFunctionalTestsMixin
     end
   end
 
+  # Test that a job with an error does not prevent the spawner from doing
+  # the other jobs, with retries.
   def test_failing_job_with_retry()
     # FIXME: check that the job has been effectively tried twice
+    # FIXME: test a job working the second time
     assert_nothing_thrown() do
       s = generate_spawner(1, false, 1)
       generate_tasks_addition(s, 1, true, 2) {plop}
