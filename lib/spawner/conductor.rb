@@ -57,36 +57,25 @@ module Spawner
       allocate_duties() if perform_now
     end
 
-    # Called without argument, this will reload the previous configuration
-    # file, if any
-    def load_config_from_file(config_file_name = nil)
-      @config_mutex.synchronize() do
-        old_configuration = @config.clone()
-
-        begin
-          @config.reload(config_file_name)
-        rescue Exception => e
-          handle_corrupted_config(e)
-        end
-
-        on_configuration_reloaded(old_configuration, @config)
-      end
+    # Load the configuration from a file with a given +file_path+.
+    # Return true if the loading was successful, false otherwise.
+    # Throw an exception if the loading failed and there was no fallback
+    # configuration.
+    #
+    # Called with no argument, this will reload the previous configuration
+    # file, if any.
+    def load_config_from_file(file_path = nil)
+      return load_config_from_source(@config.method(:reload), config_file_name)
     end
 
     alias reload_config load_config_from_file
 
+    # Load the configuration from a given +config_hash+.
+    # Return true if the loading was successful, false otherwise.
+    # Throw an exception if the loading failed and there was no fallback
+    # configuration.
     def load_config_from_hash(config_hash)
-      @config_mutex.synchronize() do
-        old_configuration = @config.clone()
-
-        begin
-          @config.load_from_hash(config_hash)
-        rescue Exception => e
-          handle_corrupted_config(e)
-        end
-
-        on_configuration_reloaded(old_configuration, @config)
-      end
+      return load_config_from_source(@config.method(:load_from_hash), config_hash)
     end
 
     def join()
@@ -161,6 +150,28 @@ module Spawner
 
     alias allocate_duties start
 
+    # Load the configuration from a given +source+, using a given
+    # +loading_method+.
+    # Return true if the loading was successful, false otherwise.
+    # Throw an exception if the loading failed and there was no fallback
+    # configuration.
+    def load_config_from_source(loading_method, source)
+      @config_mutex.synchronize() do
+        old_configuration = @config.clone()
+
+        begin
+          loading_method.call(source)
+        rescue Exception => e
+          handle_corrupted_config(e)
+          return false
+        end
+
+        on_configuration_reloaded(old_configuration, @config)
+
+        return true
+      end
+    end
+
     # Create as many runners as possible, capped by the max_concurrents_duties
     # configuration value.
     # Return the number of created runners.
@@ -228,11 +239,12 @@ module Spawner
       end
     end
 
+    # Handle the case of a corrupted configuration.
+    # If there was no configuration before, throw an exception; otherwise, do
+    # nothing.
     def handle_corrupted_config(exc)
       Spawner.spawner_logger.error("Corrupted configuration: #{exc}\n") unless Spawner.spawner_logger.nil?()
 
-      # If there's no configuration at all, crash; otherwise, use the last
-      # known configuration
       raise exc unless @config.valid?()
     end
 
