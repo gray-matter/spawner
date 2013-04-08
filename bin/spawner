@@ -3,31 +3,123 @@
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
 require 'spawner'
+require 'drb'
 
-ALLOWED_COMMANDS = ['start']
+DEFAULT_CONFIG_FILE_PATH = "#{File.dirname(__FILE__)}/../etc/config.yml"
+DEFAULT_CONDUCTOR_DRB_PORT = 4242
+
+def get_conductor_uri(config_file_path)
+  config = Spawner::Configuration.new([:spawner_port], {:spawner_port => DEFAULT_CONDUCTOR_DRB_PORT})
+
+  begin
+    config.load_from_file(config_file_path)
+  rescue Exception => ex
+    $stderr.puts "Error: unable to load configuration file: '#{ex}'"
+    exit 2
+  end
+
+  port = config[:spawner_port]
+
+  begin
+    Integer(port)
+  rescue
+    $stderr.puts "Error: the given port ('#{port}') is not valid"
+    exit 3
+  end
+
+  # FIXME: allow to bind on another machine ?
+  conductor_uri = "druby://localhost:#{port}"
+
+  return conductor_uri
+end
+
+# Get the remote conductor object
+def get_conductor(config_file_path)
+  conductor_uri = get_conductor_uri(config_file_path)
+  conductor = nil
+  exc = nil
+
+  begin
+    conductor = DRbObject.new(nil, conductor_uri)
+  rescue Exception => ex
+  end
+
+  if conductor.nil?()
+    $stderr.puts "Error: unable to bind on '#{conductor_uri}'" +
+      (exc.nil?() ? '' : exc.to_s())
+    exit 4
+  end
+
+  return conductor
+end
+
+def start_callback(config_file_path)
+  config_file_path ||= DEFAULT_CONFIG_FILE_PATH
+  $stdout.sync = true
+
+  cdtor = Spawner::Conductor.new()
+
+  begin
+    cdtor.load_config_from_file(config_file_path)
+  rescue Exception => e
+    $stderr.puts "Error: Unable to load the configuration from '#{config_file_path}': #{e}"
+    exit 2
+  end
+
+  conductor_uri = get_conductor_uri(config_file_path)
+
+  puts conductor_uri
+
+  begin
+    Process.daemon()
+  rescue Exception => exc
+    $stderr.puts "Error: unable to daemonize the process: '#{exc}'"
+    exit 2
+  end
+
+  DRb.start_service(conductor_uri, cdtor)
+
+  cdtor.wait()
+end
+
+def stop_callback(config_file_path)
+  puts "Stopping the spawner..."
+  config_file_path ||= DEFAULT_CONFIG_FILE_PATH
+  cdtor = get_conductor(config_file_path)
+  cdtor.stop()
+  cdtor.join()
+  puts "Spawner stopped"
+end
+
+def restart_callback(config_file_path)
+  config_file_path ||= DEFAULT_CONFIG_FILE_PATH
+  stop_callback(config_file_path)
+  start_callback(config_file_path)
+end
+
+def reload_callback(config_file_path)
+  # If config_file_path is nil, this will reload the file given at start time
+  cdtor = get_conductor(config_file_path)
+  cdtor.reload_config(config_file_path)
+end
+
+AVAILABLE_ACTIONS = {
+  'start' => method(:start_callback),
+  'stop' => method(:stop_callback),
+  'restart' => method(:restart_callback),
+  'reload' => method(:reload_callback),
+  'status' => method(:reload_callback)
+}
 
 def usage()
-  $stderr.puts "Usage: #$0 #{ALLOWED_COMMANDS.join('/')}"
+  $stderr.puts "Usage: #$0 #{AVAILABLE_ACTIONS.keys().join('/')} [configuration_file_path]"
+  $stderr.puts "The configuration_file_path argument is optional (defaults to '#{DEFAULT_CONFIG_FILE_PATH}')"
   exit 1
 end
 
-usage() if ARGV.size() < 1 || !ALLOWED_COMMANDS.include?(ARGV[0])
+usage() if ARGV.size() < 1 || !AVAILABLE_ACTIONS.has_key?(ARGV[0])
 
 command = ARGV[0]
+config_file_path = ARGV.size() > 1 ? ARGV[1] : nil
 
-case command
-  when "start"
-  config_file_name = ARGV.size() >= 2 ? ARGV[1] : "#{File.dirname(__FILE__)}/../etc/config.yml"
-  # TODO:
-  # - daemonize
-  # - make it reachable via DrB (to reload, add duty...)
-  conductor = Spawner::Conductor.new("#{File.dirname(__FILE__)}/../etc/config.yml")
-
-  # FIXME for distributed stuff
-  drb_uri = DRbUtils::bind_on_next_available_port("localhost", 4242, duty)
-
-  puts "DAAAAAAAAAAAEMON"
-  puts 'JOIN'
-
-  when "stop"
-end
+AVAILABLE_ACTIONS[command].call(config_file_path)
