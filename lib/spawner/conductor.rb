@@ -37,8 +37,7 @@ module Spawner
       @busy_runners = Hash.new()
       @runners_mutex = Mutex.new()
 
-      # These fields are required for implementing the "join" method
-      @joining_thread = nil
+      # This field is required for implementing the "join" method
       @no_more_duty_cond = ConditionVariable.new()
     end
 
@@ -78,29 +77,14 @@ module Spawner
       return load_config_from_source(@config.method(:load_from_hash), config_hash)
     end
 
+    # Wait for all duties to be performed, then return.
     def join()
-      @joining_thread = Thread.new() do
-        while true
-          shall_break = false
+      go_to_termination(true)
+    end
 
-          @runners_mutex.synchronize() do
-            if !@busy_runners.empty?()
-              if block_given?()
-                yield @guru.duties_count_breakdown()
-              end
-
-              @no_more_duty_cond.wait(@runners_mutex)
-            else
-              shall_break = true
-              break
-            end
-          end
-
-          break if shall_break
-        end
-      end
-
-      @joining_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
+    # Wait for the conductor to be stopped.
+    def wait()
+      go_to_termination(false)
     end
 
     def start()
@@ -130,7 +114,7 @@ module Spawner
     end
 
     def jobs_left()
-      return assign_duties_count()
+      return @guru.duties_left()
     end
 
     private
@@ -251,6 +235,31 @@ module Spawner
 
       # FIXME: if the parallelism model changes, terminate every runner which
       # runs with the old model
+    end
+
+    def go_to_termination(stop_when_done)
+      @joining_thread = Thread.new() do
+        while true
+          shall_break = false
+
+          @runners_mutex.synchronize() do
+            if stop_when_done && @busy_runners.empty?()
+              shall_break = true
+              break
+            else
+              if block_given?()
+                yield @guru.duties_count_breakdown()
+              end
+
+              @no_more_duty_cond.wait(@runners_mutex)
+            end
+          end
+
+          break if shall_break
+        end
+      end
+
+      @joining_thread.join(HUGE_TIMEOUT_TO_AVOID_DEADLOCK)
     end
   end
 end
