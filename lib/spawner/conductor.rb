@@ -107,7 +107,7 @@ module Spawner
       Spawner.spawner_logger.info("Now stopping...\n")
 
       @runners_mutex.synchronize() do
-        (@busy_runners + @idle_runners).each() do |runner|
+        (@busy_runners.values() + @idle_runners).each() do |runner|
           runner.stop()
         end
       end
