@@ -42,6 +42,16 @@ module Spawner
       allocate_duties() if perform_now
     end
 
+    # Add a serialized duty, i.e. Ruby code contained in a string.
+    # Used by the service version of the spawner, you shouldn't use it unless
+    # you know exactly what you're doing !
+    def add_serialized_duty(instructions_str, expected_value = nil, perform_now = true)
+      return add_duty(expected_value, perform_now) do
+        eval(instructions_str)
+        nil
+      end
+    end
+
     # Load the configuration from a file with a given +file_path+.
     # Return true if the loading was successful, false otherwise.
     # Throw an exception if the loading failed and there was no fallback
