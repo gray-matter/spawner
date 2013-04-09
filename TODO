@@ -5,5 +5,4 @@
  - Stop cleanly
  - Make this a gem !
  - Test configuration stuff: mandatory & optional fields handling + recover from bad config
- - Implement the service version
  - Provide a path to log files when a test fails OR allow to write to a StringIO
