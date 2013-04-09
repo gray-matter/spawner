@@ -18,14 +18,18 @@ Using the spawner as a class
 require 'spawner'
 
 EXPECTED_RETURN = 0
+
 s = Spawner::Conductor.new()
+# Note: load_config_from_hash is also available
 s.load_config_from_file('/path/to/config.yml')
+
 1.upto(10) do |i|
   s.add_duty(EXPECTED_RETURN) do
     puts "Task #{i}"
     0
   end
 end
+
 s.join()
 ```
 
@@ -36,12 +40,23 @@ Using the spawner as a service
 The spawner can also run as a standalone service, to which you send jobs
 automagically.
 
+Starting the service is as simple as:
 ```
-### Start the spawner service
-$ spawner start
-# or, for your own configuration
+### Start the spawner service (the configuration is optional)
 $ spawner start /path/to/config.yml
 ```
+
+There are two ways to give it work to do
+```
+### Run a shell command (this will simply exec the command)
+$ spawner exec 'echo "I'm a potato"'
+
+### Execute Ruby code
+$ spawner run 'puts "I'm a potato"'
+```
+
+The spawner service also supports stop/reload/restart as a regular service
+would.
 
 A bit of tuning
 ---------------
