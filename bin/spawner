@@ -1,11 +1,12 @@
 #! /usr/bin/env ruby
 
+# FIXME: remove this
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
 require 'etc'
-require 'spawner'
 require 'drb'
 require 'tmpdir'
+require 'spawner'
 
 DEFAULT_CONFIG_FILE_PATH = "#{File.dirname(__FILE__)}/../etc/config.yml"
 URI_FILE_PATH_PATTERN = 'spawner-info-' + Etc.getlogin() + '-'

@@ -1,17 +1,3 @@
-# FIXME
-$LOAD_PATH.unshift("#{File.dirname(__FILE__)}/..")
-$LOAD_PATH.unshift("#{File.dirname(__FILE__)}")
-
-require 'spawner'
-require 'guru'
-require 'adept'
-require 'configuration'
-require 'adept-thread-runner'
-require 'adept-process-runner'
-require 'set'
-require 'logger'
-require 'thread'
-
 module Spawner
   # The Conductor is the emerged part of the spawner library.
   # It is in charge of creating (aka recruiting) adepts whenever needed.

@@ -1,4 +1,3 @@
-require 'adept-runner'
 require 'thread'
 
 module Spawner

@@ -3,10 +3,10 @@
 # FIXME
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
-require 'spawner/adept'
 require 'drb'
 require 'optparse'
 require 'thread'
+require 'spawner'
 
 HUGE_TIMEOUT_TO_AVOID_DEADLOCK = 42424242
 

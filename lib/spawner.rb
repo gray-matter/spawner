@@ -6,8 +6,14 @@ module Spawner
   public
 
   autoload :Adept, 'spawner/adept'
+  autoload :AdeptProcessRunner, 'spawner/adept-process-runner'
+  autoload :AdeptRunner, 'spawner/adept-runner'
+  autoload :AdeptThreadRunner, 'spawner/adept-thread-runner'
   autoload :Conductor, 'spawner/conductor'
   autoload :Configuration, 'spawner/configuration'
+  autoload :Duty, 'spawner/duty'
+  autoload :DutyContainer, 'spawner/duty-container'
+  autoload :Guru, 'spawner/guru'
 
   def self.set_spawner_log_file(file_name)
     @spawner_logger = logger_from_file_name(file_name, STDOUT)

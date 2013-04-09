@@ -1,5 +1,3 @@
-require 'adept-runner'
-require 'duty-container'
 require 'drb'
 
 module Spawner

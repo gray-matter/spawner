@@ -1,5 +1,3 @@
-$LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
-
 require 'spawner'
 
 s = Spawner::Conductor.new("#{File.dirname(__FILE__)}/../etc/config.yml")

@@ -1,4 +1,3 @@
-require 'duty'
 require 'set'
 
 module Spawner
