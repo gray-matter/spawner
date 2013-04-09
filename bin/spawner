@@ -140,7 +140,7 @@ def start_callback(config_file_path)
   begin
     uri_file_path = store_conductor_uri(conductor_uri)
   rescue Exception => exc
-    $stderr.puts "Error: unable to store the remote spawner URI: #{exc.backtrace}"
+    $stderr.puts "Error: unable to store the remote spawner URI: #{exc}"
     exit 2
   end
 
