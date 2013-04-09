@@ -7,6 +7,7 @@ require 'etc'
 require 'drb'
 require 'tmpdir'
 require 'spawner'
+require 'sourcify'
 
 DEFAULT_CONFIG_FILE_PATH = "#{File.dirname(__FILE__)}/../etc/config.yml"
 URI_FILE_PATH_PATTERN = 'spawner-info-' + Etc.getlogin() + '-'
@@ -51,19 +52,19 @@ def store_conductor_uri(uri)
     old_pid.strip!()
     old_uri.strip!()
 
-    if pid.nil?() || uri.nil?()
+    if old_pid.nil?() || old_uri.nil?()
       $stderr.puts "Warning: badly formatted information file (#{old_file_path})"
       return
     end
 
     # Check that the referenced process exists
     begin
-      Process.kill(0, Integer(pid))
+      Process.kill(0, Integer(old_pid))
     rescue Errno::ESRCH
       # The process is dead, so nevermind
       File.unlink(old_file_path)
     else
-      raise "The spawner is already running (PID #{pid}), you cannot run more than one spawner per user"
+      raise "The spawner is already running (PID #{old_pid}), you cannot run more than one spawner per user"
     end
   end
 
@@ -139,7 +140,7 @@ def start_callback(config_file_path)
   begin
     uri_file_path = store_conductor_uri(conductor_uri)
   rescue Exception => exc
-    $stderr.puts "Error: unable to store the remote spawner URI: #{exc}"
+    $stderr.puts "Error: unable to store the remote spawner URI: #{exc.backtrace}"
     exit 2
   end
 
@@ -169,12 +170,18 @@ def reload_callback(config_file_path)
   cdtor.reload_config(config_file_path)
 end
 
+def exec_ruby_callback(code)
+  cdtor = get_conductor()
+  cdtor.add_serialized_duty(code, nil, true)
+end
+
 AVAILABLE_ACTIONS = {
   'start' => method(:start_callback),
   'stop' => method(:stop_callback),
   'restart' => method(:restart_callback),
   'reload' => method(:reload_callback),
-  'status' => method(:reload_callback)
+  'status' => method(:reload_callback),
+  'run' => method(:exec_ruby_callback)
 }
 
 def usage()
@@ -186,6 +193,6 @@ end
 usage() if ARGV.size() < 1 || !AVAILABLE_ACTIONS.has_key?(ARGV[0])
 
 command = ARGV[0]
-config_file_path = ARGV.size() > 1 ? ARGV[1] : nil
+arg = ARGV.size() > 1 ? ARGV[1] : nil
 
-AVAILABLE_ACTIONS[command].call(config_file_path)
+AVAILABLE_ACTIONS[command].call(arg)
