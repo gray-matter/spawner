@@ -109,7 +109,7 @@ module Spawner
 
     def report_duty_completion(duty_id, returned_value, expected_value)
       @duties_mutex.synchronize() do
-        if returned_value != expected_value
+        if !expected_value.nil?() && returned_value != expected_value
           Spawner.jobs_logger.info("The duty #{duty_id} returned " +
                                    "#{returned_value.inspect()} while it was expected " +
                                    "to return #{expected_value.inspect()}\n")
