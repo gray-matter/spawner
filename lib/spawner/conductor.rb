@@ -111,6 +111,12 @@ module Spawner
           runner.stop()
         end
       end
+
+      @runners_mutex.synchronize() do
+        @no_more_duty_cond.signal()
+      end
+
+      @joining_thread.kill()
     end
 
     def jobs_left()

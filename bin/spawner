@@ -2,42 +2,91 @@
 
 $LOAD_PATH.unshift("#{File.dirname(__FILE__)}/../lib")
 
+require 'etc'
 require 'spawner'
 require 'drb'
+require 'tmpdir'
 
 DEFAULT_CONFIG_FILE_PATH = "#{File.dirname(__FILE__)}/../etc/config.yml"
-DEFAULT_CONDUCTOR_DRB_PORT = 4242
+URI_FILE_PATH_PATTERN = 'spawner-info-' + Etc.getlogin() + '-'
 
-def get_conductor_uri(config_file_path)
-  config = Spawner::Configuration.new([:spawner_port], {:spawner_port => DEFAULT_CONDUCTOR_DRB_PORT})
+def get_conductor_uri_file_path()
+  pattern = File.expand_path(URI_FILE_PATH_PATTERN + "*", Dir.tmpdir)
+  matches = Dir.glob(pattern)
 
-  begin
-    config.load_from_file(config_file_path)
-  rescue Exception => ex
-    $stderr.puts "Error: unable to load configuration file: '#{ex}'"
-    exit 2
+  return nil if matches.empty?()
+
+  if matches.size() > 1
+    raise "#{matches.size()} matches for the pattern '#{pattern}', don't know which one to choose..."
   end
 
-  port = config[:spawner_port]
+  return matches[0]
+end
 
-  begin
-    Integer(port)
-  rescue
-    $stderr.puts "Error: the given port ('#{port}') is not valid"
-    exit 3
+def get_conductor_uri()
+  info_file_path = get_conductor_uri_file_path()
+
+  if info_file_path.nil?()
+    raise "Could not locate any information file: make sure " +
+      "that the spawner service is running"
   end
 
-  # FIXME: allow to bind on another machine ?
-  conductor_uri = "druby://localhost:#{port}"
+  pid, uri = IO.readlines(info_file_path)
 
-  return conductor_uri
+  return uri
+end
+
+# Store the conductor URI in an hopefully unique file.
+# Throw an exception if the storage failed or the file already exists (meaning
+# the process already exists or was not killed properly).
+def store_conductor_uri(uri)
+  old_file_path = get_conductor_uri_file_path()
+
+  # The info file already exists
+  if !old_file_path.nil?()
+    $stderr.puts "Warning: an information file already exists (#{old_file_path})"
+
+    old_pid, old_uri = IO.readlines(old_file_path)
+    old_pid.strip!()
+    old_uri.strip!()
+
+    if pid.nil?() || uri.nil?()
+      $stderr.puts "Warning: badly formatted information file (#{old_file_path})"
+      return
+    end
+
+    # Check that the referenced process exists
+    begin
+      Process.kill(0, Integer(pid))
+    rescue Errno::ESRCH
+      # The process is dead, so nevermind
+      File.unlink(old_file_path)
+    else
+      raise "The spawner is already running (PID #{pid}), you cannot run more than one spawner per user"
+    end
+  end
+
+  Dir::Tmpname.create(URI_FILE_PATH_PATTERN) do |path|
+    f = File.new(path, "w")
+    f.puts($$)
+    f.puts(uri)
+    f.close()
+
+    return path
+  end
 end
 
 # Get the remote conductor object
-def get_conductor(config_file_path)
-  conductor_uri = get_conductor_uri(config_file_path)
+def get_conductor()
+  conductor_uri = nil
   conductor = nil
-  exc = nil
+
+  begin
+    conductor_uri = get_conductor_uri()
+  rescue Exception => ex
+    $stderr.puts "Error: unable to bind on the spawner: #{ex}"
+    exit 4
+  end
 
   begin
     conductor = DRbObject.new(nil, conductor_uri)
@@ -45,8 +94,8 @@ def get_conductor(config_file_path)
   end
 
   if conductor.nil?()
-    $stderr.puts "Error: unable to bind on '#{conductor_uri}'" +
-      (exc.nil?() ? '' : exc.to_s())
+    $stderr.puts "Error: unable to bind on '#{conductor_uri}': " +
+      (ex.nil?() ? '' : ex.to_s())
     exit 4
   end
 
@@ -54,8 +103,16 @@ def get_conductor(config_file_path)
 end
 
 def start_callback(config_file_path)
+  begin
+    Process.daemon(true, true)
+  rescue Exception => exc
+    $stderr.puts "Error: unable to daemonize the process: '#{exc}'"
+    exit 2
+  end
+
+  puts "Starting spawner..."
+
   config_file_path ||= DEFAULT_CONFIG_FILE_PATH
-  $stdout.sync = true
 
   cdtor = Spawner::Conductor.new()
 
@@ -66,28 +123,36 @@ def start_callback(config_file_path)
     exit 2
   end
 
-  conductor_uri = get_conductor_uri(config_file_path)
-
-  puts conductor_uri
-
   begin
-    Process.daemon()
+    DRb.start_service(nil, cdtor)
   rescue Exception => exc
-    $stderr.puts "Error: unable to daemonize the process: '#{exc}'"
+    $stderr.puts "Error: unable to start the remote spawner: '#{exc}'"
     exit 2
   end
 
-  DRb.start_service(conductor_uri, cdtor)
+  conductor_uri = DRb.uri()
+  puts conductor_uri
 
-  cdtor.wait()
+  puts "Spawner started"
+
+  begin
+    uri_file_path = store_conductor_uri(conductor_uri)
+  rescue Exception => exc
+    $stderr.puts "Error: unable to store the remote spawner URI: #{exc}"
+    exit 2
+  end
+
+  begin
+    cdtor.wait()
+  ensure
+    File.unlink(uri_file_path)
+  end
 end
 
 def stop_callback(config_file_path)
   puts "Stopping the spawner..."
-  config_file_path ||= DEFAULT_CONFIG_FILE_PATH
-  cdtor = get_conductor(config_file_path)
+  cdtor = get_conductor()
   cdtor.stop()
-  cdtor.join()
   puts "Spawner stopped"
 end
 
@@ -99,7 +164,7 @@ end
 
 def reload_callback(config_file_path)
   # If config_file_path is nil, this will reload the file given at start time
-  cdtor = get_conductor(config_file_path)
+  cdtor = get_conductor()
   cdtor.reload_config(config_file_path)
 end
 
