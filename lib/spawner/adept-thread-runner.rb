@@ -1,6 +1,7 @@
 require 'thread'
 
 module Spawner
+  # Threads version of the AdeptRunner.
   class AdeptThreadRunner < AdeptRunner
     private
     # The sole purpose of this class is to allow to redirect writes to
@@ -17,7 +18,17 @@ module Spawner
       end
     end
 
+    # See AdeptRunner#wake_up
+    def wake_up()
+      Thread.new() do
+        @job_mutex.synchronize() do
+          @no_more_duty_cond.signal()
+        end
+      end
+    end
+
     public
+    # Construct an AdeptThreadRunner object.
     def initialize()
       super()
       @adept_thread = nil
@@ -25,6 +36,7 @@ module Spawner
       @adept = Adept.new()
     end
 
+    # See AdeptRunner#start
     def start(persistent_worker)
       @adept_thread = Thread.new() do
         Thread.abort_on_exception = true
@@ -57,6 +69,7 @@ module Spawner
       end
     end
 
+    # See AdeptRunner#stop
     def stop()
       unless @adept_thread.nil?()
         @adept_thread.kill()
@@ -65,18 +78,12 @@ module Spawner
       super()
     end
 
+    # See Object#to_s
     def to_s()
       return "#<AdeptThreadRunner: thread id = #{@adept_thread.object_id}>"
     end
 
-    def wake_up()
-      Thread.new() do
-        @job_mutex.synchronize() do
-          @no_more_duty_cond.signal()
-        end
-      end
-    end
-
+    # See AdeptRunner#alive?
     def alive?()
       return !@adept_thread.nil?() && @adept_thread.alive?()
     end

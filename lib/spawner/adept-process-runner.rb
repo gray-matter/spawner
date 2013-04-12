@@ -1,14 +1,17 @@
 require 'drb'
 
 module Spawner
+  # Processes version of the AdeptRunner.
   class AdeptProcessRunner < AdeptRunner
     public
+    # Construct an AdeptProcessRunner.
     def initialize()
       super()
       @adept_process_id = nil
       @reader_thread = nil
     end
 
+    # See AdeptRunner#start
     def start(persistent_worker)
       # FIXME for distributed stuff
       DRb.start_service(nil, @duty_container)
@@ -16,6 +19,7 @@ module Spawner
       spawn_process(drb_uri, persistent_worker)
     end
 
+    # See AdeptRunner#stop
     def stop()
       if !@adept_process_id.nil?()
         Process.kill("KILL", @adept_process_id) rescue Errno::ESRCH
@@ -25,6 +29,7 @@ module Spawner
       super()
     end
 
+    # See AdeptRunner#alive?
     def alive?()
       return false if @adept_process_id.nil?()
 
@@ -37,6 +42,7 @@ module Spawner
       end
     end
 
+    # See Object#to_s
     def to_s()
       return "#<AdeptProcessRunner: pid = #@adept_process_id>"
     end
@@ -45,6 +51,9 @@ module Spawner
     # FIXME : configurable path
     RUN_ADEPT_SCRIPT = "#{File.dirname(__FILE__)}/../../bin/run-adept"
 
+    # Spawn a process which will be persistent or not depending on
+    # +persistent_worker+ and will be given a DutyContainer on the given
+    # +drb_uri+.
     def spawn_process(drb_uri, persistent_worker)
       # FIXME : make this work under Window$
       my_out, its_out = IO.pipe()
@@ -93,6 +102,7 @@ module Spawner
       Process.detach(@adept_process_id)
     end
 
+    # See AdeptRunner#wake_up
     def wake_up()
       Process.kill('CONT', @adept_process_id)
     end

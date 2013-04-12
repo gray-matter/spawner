@@ -6,6 +6,7 @@ module Spawner
     PARALLELISM_MODEL_THREADS = 'thread'
     PARALLELISM_MODEL_PROCESSES = 'process'
 
+    # Construct a Conductor object.
     def initialize()
       Thread.abort_on_exception = true
 
@@ -97,6 +98,7 @@ module Spawner
       end
     end
 
+    # Stop the conductor ASAP.
     def stop()
       @stopping = true
 
@@ -115,6 +117,7 @@ module Spawner
       @joining_thread.kill()
     end
 
+    # Return the number of jobs left.
     def jobs_left()
       return @guru.duties_left()
     end
@@ -162,6 +165,7 @@ module Spawner
       end
     end
 
+    # Spawn a single adept runner of the right type, wrt the configuration.
     def spawn_adept_runner()
       adept_runner = nil
       parallelism_model = @config[:parallelism_model]
@@ -179,6 +183,7 @@ module Spawner
       return adept_runner
     end
 
+    # Report the end of the duty referenced by +duty_id+.
     def report_duty_end(duty_id)
       @runners_mutex.synchronize() do
         runner = @busy_runners.delete(duty_id)
@@ -215,7 +220,7 @@ module Spawner
       end
     end
 
-    # Handle the case of a corrupted configuration.
+    # Handle the case of a corrupted configuration, with +exc+ exception.
     # If there was no configuration before, throw an exception; otherwise, do
     # nothing.
     def handle_corrupted_config(exc)
@@ -224,6 +229,8 @@ module Spawner
       raise exc unless @config.valid?()
     end
 
+    # Handle the change of configuration from +old_configuration+ to
+    # +new_configuration+.
     def on_configuration_reloaded(old_configuration, new_configuration)
       # There's no need to reload the logger if the path has not changed !
       [[:jobs_log_file_name, :set_jobs_log_file],
@@ -234,11 +241,11 @@ module Spawner
           Spawner.send(meth, new_configuration[key])
         end
       end
-
-      # FIXME: if the parallelism model changes, terminate every runner which
-      # runs with the old model
     end
 
+    # Wait until termination of what the conductor needs to do, stopping when
+    # all duties are done or not, depending on the +stop_when_done+ boolean
+    # value.
     def go_to_termination(stop_when_done)
       @joining_thread = Thread.new() do
         while true

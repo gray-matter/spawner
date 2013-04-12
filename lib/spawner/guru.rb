@@ -3,10 +3,10 @@ require 'set'
 module Spawner
   # A Guru holds the instructions and knows which adept is in charge of which
   # duty
-  # FIXME: this is no longer true, cf. conductor
   class Guru
     public
 
+    # Construct a Guru.
     def initialize()
       @duties_mutex = Mutex.new()
 
@@ -22,7 +22,10 @@ module Spawner
       @duty_end_callback = Proc.new() {}
     end
 
-    # Add instructions for a duty to to be performed by adepts.
+    # Add +instructions+ for a duty to to be performed by adepts. If the
+    # instructions return value is not the +expected_value+, it will be
+    # considered as failed. The given job will be retried at most +max_retries+
+    # times.
     def add_duty(instructions, expected_value, max_retries)
       duty_id = nil
 
@@ -65,6 +68,7 @@ module Spawner
       return duty_id_to_runner_mapping
     end
 
+    # Get the completion time of the duty referenced by +duty_id+.
     def duty_completion_time(duty_id)
       @duties_mutex.synchronize() do
         duty = @duties[duty_id]
@@ -75,18 +79,21 @@ module Spawner
       end
     end
 
+    # Get the count of unassigned duties, i.e. duties run by no adept yet.
     def unassigned_duties_count()
       @duties_mutex.synchronize() do
         return @duties.size() - @unassigned_duties_id.size()
       end
     end
 
+    # Get the count of assigned duties, i.e. duties currently run by an adept.
     def assigned_duties_count()
       @duties_mutex.synchronize() do
         return @unassigned_duties_id.size()
       end
     end
 
+    # Get the count of duties (both assigned and unassigned) left.
     def duties_left()
       @duties_mutex.synchronize() do
         return @duties.size()
@@ -101,12 +108,17 @@ module Spawner
       end
     end
 
+    # Register the given +callback+ as the one called whenever a duty ends.
+    # This callback takes a single argument, which is the id of the finished
+    # duty.
     def register_duty_end_callback(callback)
       @duty_end_callback = callback
     end
 
     private
 
+    # Handle the completion of the duty referenced by +duty_id+, with the given
+    # +returned_value+, while +expected_value+ was expected.
     def report_duty_completion(duty_id, returned_value, expected_value)
       @duties_mutex.synchronize() do
         if !expected_value.nil?() && returned_value != expected_value
@@ -121,11 +133,11 @@ module Spawner
         end
       end
 
-#      Thread.new() do
-        @duty_end_callback.call(duty_id)
-#      end
+      @duty_end_callback.call(duty_id)
     end
 
+    # Handle the failure of the duty referenced by +duty_id+, +exc+ being the
+    # exception thrown by the adept when it ran the duty.
     def report_duty_failure(duty_id, exc)
       Spawner.jobs_logger.error(" The job #{duty_id} failed with the following exception: #{exc} (#{exc.backtrace().join("\n")})\n")
 
@@ -133,13 +145,13 @@ module Spawner
         handle_duty_failure(duty_id)
       end
 
-#      Thread.new() do
-        @duty_end_callback.call(duty_id)
-#      end
+      @duty_end_callback.call(duty_id)
     end
 
     # /!\ This method MUST BE called within a mutex lock block, since it is not
     # thread-safe.
+    # Handle what's going on after the duty referenced by +duty_id+ has failed
+    # (retry it or not, mainly).
     def handle_duty_failure(duty_id)
       if @remaining_retries[duty_id] > 0
         Spawner.jobs_logger.info("Retrying the duty #{duty_id} (#{@remaining_retries[duty_id]} retries remaining)")

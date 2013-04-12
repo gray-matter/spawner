@@ -1,6 +1,7 @@
 require 'drb'
 
 module Spawner
+  # Emulate a lookup stack based on the given bindings.
   # As seen on https://github.com/niklasb/ruby-dynamic-binding
   class LookupStack
     def initialize(bindings = [])
@@ -25,8 +26,9 @@ module Spawner
 end
 
 class Proc
-  def call_with_binding(bind)
-    Spawner::LookupStack.new([bind]).run_proc(self)
+  # Call the proc, providing it the needed +bindings+.
+  def call_with_binding(bindings)
+    Spawner::LookupStack.new([bindings]).run_proc(self)
   end
 end
 
@@ -37,6 +39,7 @@ module Spawner
 
     REQUIRED_DUTY_METHODS = ['get_instructions_and_binding', 'report_completion']
 
+    # Give a +duty+ to this adept for him to perform it.
     def give_duty(duty)
       REQUIRED_DUTY_METHODS.each() do |method|
         raise "I will not perform my duty because it doesn't say how to '#{method}'" if !duty.respond_to?(method)
@@ -47,6 +50,7 @@ module Spawner
 
     private
 
+    # Perform the given +duty+.
     def perform_duty(duty)
       # This will be a proc everytime, which can be a problem if it
       # contains a return statement => transform into a lambda
