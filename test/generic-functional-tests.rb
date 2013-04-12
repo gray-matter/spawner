@@ -32,8 +32,8 @@ module GenericFunctionalTestsMixin
   end
 
   def setup()
-    @spawner_log_file = Tempfile.new('spawner_log')
-    @jobs_log_file = Tempfile.new('jobs_log')
+    Dir::Tmpname.create('spawner_log') {|path| @spawner_log_file = path}
+    Dir::Tmpname.create('jobs_log') {|path| @jobs_log_file = path}
   end
 
   # Test that the spawner works as expected when given no task and asked to join
@@ -43,11 +43,11 @@ module GenericFunctionalTestsMixin
         [true, false].each() do |perform_now|
           assert_nothing_thrown() do
             s = generate_spawner(concurrent_duties, persistent_workers, 0,
-                                 @jobs_log_file.path())
+                                 @jobs_log_file, @spawner_log_file)
             generate_tasks_addition(s, 0, perform_now, 2) {}
           end
 
-          assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
+          assert_equal(0, File.stat(@jobs_log_file).size(), "The jobs log is not empty, while it should")
         end
       end
     end
@@ -60,11 +60,11 @@ module GenericFunctionalTestsMixin
         [true, false].each() do |perform_now|
           assert_nothing_thrown() do
             s = generate_spawner(concurrent_duties, persistent_workers, 0,
-                                 @jobs_log_file.path())
+                                 @jobs_log_file, @spawner_log_file)
             generate_tasks_addition(s, 10, perform_now, 3) {}
           end
 
-          assert_equal(0, @jobs_log_file.size(), "The jobs log is not empty, while it should")
+          assert_equal(0, File.stat(@jobs_log_file).size(), "The jobs log is not empty, while it should")
         end
       end
     end
@@ -73,7 +73,7 @@ module GenericFunctionalTestsMixin
   # Test that the spawner handles return statements in the instructions block
   def test_return_in_job()
     assert_nothing_thrown() do
-      s = generate_spawner(1, false)
+      s = generate_spawner(1, false, 0, @jobs_log_file, @spawner_log_file)
       generate_tasks_addition(s, 1, true, 2) {return 42}
     end
   end
@@ -82,7 +82,7 @@ module GenericFunctionalTestsMixin
   # the other jobs, without retrying.
   def test_failing_job_without_retries()
     assert_nothing_thrown() do
-      s = generate_spawner(1, false, 0)
+      s = generate_spawner(1, false, 0, @jobs_log_file, @spawner_log_file)
       generate_tasks_addition(s, 1, true, 2) {plop}
     end
   end
@@ -93,7 +93,7 @@ module GenericFunctionalTestsMixin
     # FIXME: check that the job has been effectively tried twice
     # FIXME: test a job working the second time
     assert_nothing_thrown() do
-      s = generate_spawner(1, false, 1)
+      s = generate_spawner(1, false, 1, @jobs_log_file, @spawner_log_file)
       generate_tasks_addition(s, 1, true, 2) {plop}
     end
   end
