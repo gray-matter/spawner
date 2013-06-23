@@ -9,8 +9,10 @@ Gem::Specification.new do |s|
   s.authors     = ["Xavier NOELLE"]
   s.email       = ["xavier[dot]noelle[at]gmail[dot]com"]
   s.homepage    = "https://github.com/gray-matter/spawner"
-  s.summary     = %q{Simple loop job runner service.}
-  s.description = %q{The spawner lets you parallelize anything, using either threads or processes.}
+  s.summary     = %q{The spawner lets you parallelize anything, using either threads or processes.}
+  s.description = %q{The spawner lets you parallelize anything, using either
+ threads or processes. You may instantiate it via the Ruby library or start a
+ spawner service to which you may send tasks via the command line.}
   s.files         = `git ls-files`.split("\n")
   s.test_files    = `git ls-files -- test/*-functional-*`.split("\n")
   s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }

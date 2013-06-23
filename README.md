@@ -2,8 +2,11 @@ spawner
 =======
 /!\ This is still a WIP project, release coming soon /!\
 
-The spawner lets you parallelize anything, using either threads or
-processes. All you need is to write the code to run, configure a few values and
+The spawner lets you parallelize anything, using either threads or processes.
+You may instantiate it via the Ruby library or start a spawner service to
+which you may send tasks via the command line.
+
+All you need is to write the code to run, configure a few values and
 let the magic happen !
 
 Installation
@@ -38,7 +41,7 @@ More examples [here](/examples).
 Using the spawner as a service
 ------------------------------
 The spawner can also run as a standalone service, to which you send jobs
-automagically.
+which will be executed automagically.
 
 Starting the service is as simple as:
 ```
