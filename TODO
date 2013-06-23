@@ -7,3 +7,4 @@
  - Test configuration stuff: mandatory & optional fields handling + recover from bad config
  - Provide a path to log files when a test fails OR allow to write to a StringIO
  - Test the service version
+ - If the parallelism model changes, terminate every runner which runs with the old model
