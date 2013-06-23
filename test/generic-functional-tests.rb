@@ -97,4 +97,18 @@ module GenericFunctionalTestsMixin
       generate_tasks_addition(s, 1, true, 2) {plop}
     end
   end
+
+  # Test that the spawner handles return statements in the instructions block
+  def test_suicide_duty()
+    [1, 2].each() do |concurrent_duties|
+      [true, false].each() do |persistent_workers|
+        assert_nothing_thrown() do
+          s = generate_spawner(concurrent_duties, persistent_workers, 0,
+                               @jobs_log_file, @spawner_log_file)
+
+          generate_tasks_addition(s, 2, true, 2) {exit 42}
+        end
+      end
+    end
+  end
 end
