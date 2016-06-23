@@ -1,6 +1,6 @@
 spawner
 =======
-/!\ This is still a WIP project, release coming soon /!\
+/!\ Abandoned project /!\
 
 The spawner lets you parallelize anything, using either threads or processes.
 You may instantiate it via the Ruby library or start a spawner service to
